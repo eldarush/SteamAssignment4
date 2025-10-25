@@ -3,45 +3,44 @@ using System.Text.Json;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace RabbitThingy.Services
+namespace RabbitThingy.Services;
+
+public static class DataParser
 {
-    public static class DataParser
+    public static List<UserData> ParseJsonData(string jsonData)
     {
-        public static List<UserData> ParseJsonData(string jsonData)
+        try
         {
-            try
+            var options = new JsonSerializerOptions
             {
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
+                PropertyNameCaseInsensitive = true
+            };
                 
-                var data = JsonSerializer.Deserialize<List<UserData>>(jsonData, options);
-                return data ?? new List<UserData>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error parsing JSON data: {ex.Message}");
-                return new List<UserData>();
-            }
+            var data = JsonSerializer.Deserialize<List<UserData>>(jsonData, options);
+            return data ?? [];
         }
-
-        public static List<UserData> ParseYamlData(string yamlData)
+        catch (Exception ex)
         {
-            try
-            {
-                var deserializer = new DeserializerBuilder()
-                    .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                    .Build();
+            Console.WriteLine($"Error parsing JSON data: {ex.Message}");
+            return [];
+        }
+    }
 
-                var data = deserializer.Deserialize<List<UserData>>(yamlData);
-                return data ?? new List<UserData>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error parsing YAML data: {ex.Message}");
-                return new List<UserData>();
-            }
+    public static List<UserData> ParseYamlData(string yamlData)
+    {
+        try
+        {
+            var deserializer = new DeserializerBuilder()
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .Build();
+
+            var data = deserializer.Deserialize<List<UserData>>(yamlData);
+            return data;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error parsing YAML data: {ex.Message}");
+            return [];
         }
     }
 }

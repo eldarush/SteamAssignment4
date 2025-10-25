@@ -3,6 +3,7 @@ using RabbitMQ.Client;
 using RabbitThingy.Models;
 using System.Text;
 using System.Text.Json;
+using RabbitThingy.Configuration.RabbitMQ;
 
 namespace RabbitThingy.Communication.Publishers;
 
@@ -10,26 +11,24 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
-    private readonly string _hostname;
-    private readonly int _port;
-    private readonly string _username;
-    private readonly string _password;
 
     public string Type => "RabbitMQ";
 
     public RabbitMqProducerService(IConfiguration configuration)
     {
-        _hostname = configuration["RabbitMqConfig:HostName"] ?? "localhost";
-        _port = configuration.GetValue<int>("RabbitMqConfig:Port", 5672);
-        _username = configuration["RabbitMqConfig:UserName"] ?? "admin";
-        _password = configuration["RabbitMqConfig:Password"] ?? "admin";
+        var config =
+            // Load configuration into the config object
+            new RabbitMqConfig
+            {
+                HostName = configuration["RabbitMqConfig:HostName"] ?? throw new InvalidOperationException("RabbitMqConfig:HostName is required in appsettings.json"),
+                Port = configuration.GetValue<int>("RabbitMqConfig:Port"),
+                UserName = configuration["RabbitMqConfig:UserName"] ?? throw new InvalidOperationException("RabbitMqConfig:UserName is required in appsettings.json"),
+                Password = configuration["RabbitMqConfig:Password"] ?? throw new InvalidOperationException("RabbitMqConfig:Password is required in appsettings.json")
+            };
 
         var factory = new ConnectionFactory
         {
-            HostName = _hostname,
-            Port = _port,
-            UserName = _username,
-            Password = _password
+            HostName = config.HostName, Port = config.Port, UserName = config.UserName, Password = config.Password
         };
 
         _connection = factory.CreateConnection();
@@ -55,10 +54,10 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
         properties.ContentType = "application/json";
 
         _channel.BasicPublish(exchange: "",
-                             routingKey: queueName,
-                             basicProperties: properties,
-                             body: body);
-                             
+            routingKey: queueName,
+            basicProperties: properties,
+            body: body);
+
         // Add await to fix warning
         await Task.CompletedTask;
     }
@@ -82,10 +81,10 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
         properties.ContentType = "application/json";
 
         _channel.BasicPublish(exchange: exchangeName,
-                             routingKey: routingKey,
-                             basicProperties: properties,
-                             body: body);
-                             
+            routingKey: routingKey,
+            basicProperties: properties,
+            body: body);
+
         // Add await to fix warning
         await Task.CompletedTask;
     }

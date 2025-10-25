@@ -11,11 +11,11 @@
         <PackageReference Include="NUnit" Version="4.1.0" />
         <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
         <PackageReference Include="NUnit.Analyzers" Version="4.0.1" />
+        <PackageReference Include="Moq" Version="4.20.70" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\RabbitThingy.Core\RabbitThingy.Core.csproj" />
-        <ProjectReference Include="..\RabbitThingy.RabbitMQ\RabbitThingy.RabbitMQ.csproj" />
+        <ProjectReference Include="..\RabbitThingy\RabbitThingy.csproj" />
     </ItemGroup>
 
 </Project>

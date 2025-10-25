@@ -13,15 +13,19 @@ public class MessagePublisherFactory
         _configuration = configuration;
     }
 
-    public IMessagePublisher CreatePublisher(string type)
+    private IMessagePublisher CreatePublisher(string type)
     {
         var publisher = _publishers.FirstOrDefault(p => p.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
             
         if (publisher == null)
-        {
             throw new NotSupportedException($"Publisher type '{type}' is not supported.");
-        }
 
         return publisher;
+    }
+    
+    public async Task PublishAsync(string type, List<Models.CleanedUserData> data, string destination)
+    {
+        var publisher = CreatePublisher(type);
+        await publisher.PublishAsync(data, destination);
     }
 }
