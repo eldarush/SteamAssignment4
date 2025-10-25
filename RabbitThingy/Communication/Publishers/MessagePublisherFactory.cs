@@ -1,12 +1,16 @@
+using Microsoft.Extensions.Configuration;
+
 namespace RabbitThingy.Communication.Publishers;
 
 public class MessagePublisherFactory
 {
     private readonly IEnumerable<IMessagePublisher> _publishers;
+    private readonly IConfiguration _configuration;
 
-    public MessagePublisherFactory(IEnumerable<IMessagePublisher> publishers)
+    public MessagePublisherFactory(IEnumerable<IMessagePublisher> publishers, IConfiguration configuration)
     {
         _publishers = publishers;
+        _configuration = configuration;
     }
 
     public IMessagePublisher CreatePublisher(string type)

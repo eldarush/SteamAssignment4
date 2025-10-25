@@ -1,14 +1,18 @@
+using Microsoft.Extensions.Configuration;
+
 namespace RabbitThingy.Communication.Consumers;
 
 public class MessageConsumerFactory
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IEnumerable<IMessageConsumer> _consumers;
+    private readonly IConfiguration _configuration;
 
-    public MessageConsumerFactory(IServiceProvider serviceProvider, IEnumerable<IMessageConsumer> consumers)
+    public MessageConsumerFactory(IServiceProvider serviceProvider, IEnumerable<IMessageConsumer> consumers, IConfiguration configuration)
     {
         _serviceProvider = serviceProvider;
         _consumers = consumers;
+        _configuration = configuration;
     }
 
     public IMessageConsumer CreateConsumer(string type)

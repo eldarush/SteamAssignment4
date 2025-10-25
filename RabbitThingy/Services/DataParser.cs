@@ -1,4 +1,7 @@
 using RabbitThingy.Models;
+using System.Text.Json;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace RabbitThingy.Services
 {
@@ -6,14 +9,39 @@ namespace RabbitThingy.Services
     {
         public static List<UserData> ParseJsonData(string jsonData)
         {
-            // Implementation will be added later
-            throw new System.NotImplementedException();
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                
+                var data = JsonSerializer.Deserialize<List<UserData>>(jsonData, options);
+                return data ?? new List<UserData>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing JSON data: {ex.Message}");
+                return new List<UserData>();
+            }
         }
 
         public static List<UserData> ParseYamlData(string yamlData)
         {
-            // Implementation will be added later
-            throw new System.NotImplementedException();
+            try
+            {
+                var deserializer = new DeserializerBuilder()
+                    .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                    .Build();
+
+                var data = deserializer.Deserialize<List<UserData>>(yamlData);
+                return data ?? new List<UserData>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing YAML data: {ex.Message}");
+                return new List<UserData>();
+            }
         }
     }
 }

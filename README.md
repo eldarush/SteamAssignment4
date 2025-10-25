@@ -11,6 +11,7 @@ This project implements an asynchronous data integration system using RabbitMQ. 
 - Publishing to RabbitMQ exchange (fanout type)
 - Configurable output file size limit
 - Exception handling for missing queues/exchanges
+- Configuration-driven service instantiation
 
 ## How It Works
 
@@ -42,3 +43,7 @@ Given the sample input data:
 
 The system will produce:
 [{"id": 1, "name": "Bob"}, {"id": 2, "name": "Alice"}, {"id": 3, "name": "Charlie"}, {"id": 4, "name": "Dana"}]
+
+## Implementation Details
+
+All services now receive their configuration directly from the appsettings.json file through dependency injection, eliminating the need to hardcode credentials in each service.

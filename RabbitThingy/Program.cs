@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RabbitThingy.Communication.Consumers;
@@ -24,14 +25,17 @@ class Program
                 .ReadFrom.Configuration(context.Configuration))
             .ConfigureServices((hostContext, services) =>
             {
+                // Register configuration
+                services.AddSingleton<IConfiguration>(hostContext.Configuration);
+                
                 // Register services
                 services.AddSingleton<DataProcessingService>();
 
                 // Register consumers
-                services.AddSingleton<IMessageConsumer, RabbitMqConsumerService>();
+                services.AddTransient<IMessageConsumer, RabbitMqConsumerService>();
 
                 // Register publishers
-                services.AddSingleton<IMessagePublisher, RabbitMqProducerService>();
+                services.AddTransient<IMessagePublisher, RabbitMqProducerService>();
 
                 // Register factories
                 services.AddSingleton<MessageConsumerFactory>();

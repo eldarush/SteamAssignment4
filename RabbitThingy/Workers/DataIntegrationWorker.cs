@@ -48,12 +48,12 @@ public class DataIntegrationWorker : IHostedService
             var rawData2 = new List<UserData>();
             
             var consumeTask1 = Task.Run(async () => {
-                var consumer = new Communication.Consumers.RabbitMqConsumerService();
+                var consumer = new Communication.Consumers.RabbitMqConsumerService(_configuration);
                 return await consumer.ConsumeFromQueueAsync(queue1Name);
             });
             
             var consumeTask2 = Task.Run(async () => {
-                var consumer = new Communication.Consumers.RabbitMqConsumerService();
+                var consumer = new Communication.Consumers.RabbitMqConsumerService(_configuration);
                 return await consumer.ConsumeFromQueueAsync(queue2Name);
             });
             
@@ -108,7 +108,7 @@ public class DataIntegrationWorker : IHostedService
             
             // Send JSON data to queue 1
             var queue1Name = _configuration["InputQueues:Queue1"] ?? "queue1";
-            var publisher = new Communication.Publishers.RabbitMqProducerService();
+            var publisher = new Communication.Publishers.RabbitMqProducerService(_configuration);
             
             // Convert to CleanedUserData for publishing
             var cleanedJsonData = jsonUserData.Select(data => new CleanedUserData
@@ -136,7 +136,7 @@ public class DataIntegrationWorker : IHostedService
             
             // Send YAML data to queue 2
             var queue2Name = _configuration["InputQueues:Queue2"] ?? "queue2";
-            var publisher = new Communication.Publishers.RabbitMqProducerService();
+            var publisher = new Communication.Publishers.RabbitMqProducerService(_configuration);
             
             // Convert to CleanedUserData for publishing
             var cleanedYamlData = yamlUserData.Select(data => new CleanedUserData

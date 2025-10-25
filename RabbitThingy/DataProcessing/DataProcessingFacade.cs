@@ -24,13 +24,31 @@ public class DataProcessingFacade
         // Clean data using LINQ
         var cleanedData = _processingService.CleanData(rawData);
             
-        _logger.LogInformation("Merging and sorting {Count} cleaned records", cleanedData.Count);
+        _logger.LogInformation("Sorting {Count} cleaned records", cleanedData.Count);
             
-        // Sort data
-        var sortedData = _processingService.MergeAndSortData([], cleanedData);
+        // Sort data by ID
+        var sortedData = cleanedData.OrderBy(data => data.Id).ToList();
             
         _logger.LogInformation("Processed {Count} records", sortedData.Count);
             
         return sortedData;
+    }
+    
+    public List<CleanedUserData> ProcessMultipleDataLists(List<UserData> rawData1, List<UserData> rawData2)
+    {
+        _logger.LogInformation("Cleaning {Count1} and {Count2} raw data records", rawData1.Count, rawData2.Count);
+            
+        // Clean data using LINQ
+        var cleanedData1 = _processingService.CleanData(rawData1);
+        var cleanedData2 = _processingService.CleanData(rawData2);
+            
+        _logger.LogInformation("Merging and sorting {Count1} and {Count2} cleaned records", cleanedData1.Count, cleanedData2.Count);
+            
+        // Merge and sort data
+        var mergedData = _processingService.MergeAndSortData(cleanedData1, cleanedData2);
+            
+        _logger.LogInformation("Processed {Count} records", mergedData.Count);
+            
+        return mergedData;
     }
 }

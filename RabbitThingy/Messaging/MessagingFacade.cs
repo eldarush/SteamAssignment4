@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Communication.Publishers;
@@ -10,16 +11,19 @@ public class MessagingFacade : IDisposable
     private readonly MessageConsumerFactory _consumerFactory;
     private readonly MessagePublisherFactory _publisherFactory;
     private readonly ILogger<MessagingFacade> _logger;
+    private readonly IConfiguration _configuration;
     private readonly List<IDisposable> _disposables = new();
 
     public MessagingFacade(
         MessageConsumerFactory consumerFactory,
         MessagePublisherFactory publisherFactory,
-        ILogger<MessagingFacade> logger)
+        ILogger<MessagingFacade> logger,
+        IConfiguration configuration)
     {
         _consumerFactory = consumerFactory;
         _publisherFactory = publisherFactory;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task<List<UserData>> ConsumeFromSourcesAsync(List<(MessageType Type, string Name)> sources)
@@ -30,8 +34,8 @@ public class MessagingFacade : IDisposable
         {
             IMessageConsumer consumer = type switch
             {
-                MessageType.Queue => new RabbitMqConsumerService(),
-                MessageType.Exchange => new RabbitMqConsumerService(),
+                MessageType.Queue => new RabbitMqConsumerService(_configuration),
+                MessageType.Exchange => new RabbitMqConsumerService(_configuration),
                 _ => throw new NotSupportedException($"Message type '{type}' is not supported.")
             };
 
@@ -55,8 +59,8 @@ public class MessagingFacade : IDisposable
     {
         IMessagePublisher publisher = destinationType switch
         {
-            MessageType.Queue => new RabbitMqProducerService(),
-            MessageType.Exchange => new RabbitMqProducerService(),
+            MessageType.Queue => new RabbitMqProducerService(_configuration),
+            MessageType.Exchange => new RabbitMqProducerService(_configuration),
             _ => throw new NotSupportedException($"Message type '{destinationType}' is not supported.")
         };
 

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitThingy.Models;
@@ -17,12 +18,12 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
 
     public string Type => "RabbitMQ";
 
-    public RabbitMqConsumerService()
+    public RabbitMqConsumerService(IConfiguration configuration)
     {
-        _hostname = "localhost";
-        _port = 5672;
-        _username = "admin";
-        _password = "admin";
+        _hostname = configuration["RabbitMqConfig:HostName"] ?? "localhost";
+        _port = configuration.GetValue<int>("RabbitMqConfig:Port", 5672);
+        _username = configuration["RabbitMqConfig:UserName"] ?? "admin";
+        _password = configuration["RabbitMqConfig:Password"] ?? "admin";
 
         var factory = new ConnectionFactory
         {
@@ -53,7 +54,6 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
         var consumer = new EventingBasicConsumer(_channel);
         
         var messageCount = 0;
-        var tcs = new TaskCompletionSource<bool>();
 
         consumer.Received += (model, ea) =>
         {
@@ -91,11 +91,12 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
             // In a real scenario, you might want to implement a timeout or other mechanism
             if (messageCount >= 10)
             {
-                tcs.SetResult(true);
+                // Break out of consumption loop
+                _channel.BasicCancel(consumer.ConsumerTags[0]);
             }
         };
 
-        _channel.BasicConsume(queue: queueName,
+        var consumerTag = _channel.BasicConsume(queue: queueName,
                              autoAck: false,
                              consumer: consumer);
 

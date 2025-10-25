@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using RabbitThingy.Models;
 using System.Text;
@@ -16,12 +17,12 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
 
     public string Type => "RabbitMQ";
 
-    public RabbitMqProducerService()
+    public RabbitMqProducerService(IConfiguration configuration)
     {
-        _hostname = "localhost";
-        _port = 5672;
-        _username = "admin";
-        _password = "admin";
+        _hostname = configuration["RabbitMqConfig:HostName"] ?? "localhost";
+        _port = configuration.GetValue<int>("RabbitMqConfig:Port", 5672);
+        _username = configuration["RabbitMqConfig:UserName"] ?? "admin";
+        _password = configuration["RabbitMqConfig:Password"] ?? "admin";
 
         var factory = new ConnectionFactory
         {
