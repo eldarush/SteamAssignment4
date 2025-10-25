@@ -20,10 +20,10 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
 
     public RabbitMqConsumerService(IConfiguration configuration)
     {
-        _hostname = configuration["RabbitMqConfig:HostName"] ?? "localhost";
-        _port = configuration.GetValue<int>("RabbitMqConfig:Port", 5672);
-        _username = configuration["RabbitMqConfig:UserName"] ?? "admin";
-        _password = configuration["RabbitMqConfig:Password"] ?? "admin";
+        _hostname = configuration["RabbitMqConfig:HostName"] ?? throw new InvalidOperationException("RabbitMqConfig:HostName is required in appsettings.json");
+        _port = configuration.GetValue<int>("RabbitMqConfig:Port");
+        _username = configuration["RabbitMqConfig:UserName"] ?? throw new InvalidOperationException("RabbitMqConfig:UserName is required in appsettings.json");
+        _password = configuration["RabbitMqConfig:Password"] ?? throw new InvalidOperationException("RabbitMqConfig:Password is required in appsettings.json");
 
         var factory = new ConnectionFactory
         {

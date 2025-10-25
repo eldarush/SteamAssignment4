@@ -11,7 +11,7 @@ This project implements an asynchronous data integration system using RabbitMQ. 
 - Publishing to RabbitMQ exchange (fanout type)
 - Configurable output file size limit
 - Exception handling for missing queues/exchanges
-- Configuration-driven service instantiation
+- Configuration-driven service instantiation with no default values
 
 ## How It Works
 
@@ -24,7 +24,7 @@ This project implements an asynchronous data integration system using RabbitMQ. 
 
 ## Configuration
 
-The system can be configured through `appsettings.json`:
+The system requires all configuration to be present in `appsettings.json`:
 - RabbitMQ connection settings (hostname, port, username, password)
 - Input queue names (queue1, queue2)
 - Output exchange name ("exchange")
@@ -34,6 +34,7 @@ The system can be configured through `appsettings.json`:
 
 - RabbitMQ server running on localhost:5672 with username/password: admin/admin
 - Pre-existing queues (queue1, queue2) and exchange ("exchange") of type fanout
+- All configuration values must be present in appsettings.json (no defaults)
 
 ## Expected Output
 
@@ -46,4 +47,4 @@ The system will produce:
 
 ## Implementation Details
 
-All services now receive their configuration directly from the appsettings.json file through dependency injection, eliminating the need to hardcode credentials in each service.
+All services now receive their configuration directly from the appsettings.json file through dependency injection, with no default values. If any required configuration is missing, the application will throw an exception at startup.
