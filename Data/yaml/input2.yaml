@@ -1,0 +1,8 @@
+- id: 3
+  name: Charlie
+  email: charlie@domain.com
+  department: HR
+- id: 4
+  name: Dana
+  email: dana@domain.com
+  location: NY

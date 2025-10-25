@@ -1,0 +1,25 @@
+namespace RabbitThingy.Communication.Consumers;
+
+public class MessageConsumerFactory
+{
+    private readonly IServiceProvider _serviceProvider;
+    private readonly IEnumerable<IMessageConsumer> _consumers;
+
+    public MessageConsumerFactory(IServiceProvider serviceProvider, IEnumerable<IMessageConsumer> consumers)
+    {
+        _serviceProvider = serviceProvider;
+        _consumers = consumers;
+    }
+
+    public IMessageConsumer CreateConsumer(string type)
+    {
+        var consumer = _consumers.FirstOrDefault(c => c.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
+            
+        if (consumer == null)
+        {
+            throw new NotSupportedException($"Consumer type '{type}' is not supported.");
+        }
+
+        return consumer;
+    }
+}
