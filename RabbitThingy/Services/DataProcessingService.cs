@@ -8,29 +8,47 @@ namespace RabbitThingy.Services;
 public class DataProcessingService
 {
     /// <summary>
-    /// Cleans raw user data by extracting only the ID and Name properties
+    /// Cleans raw user data by extracting only the ID and Name properties using LINQ
     /// </summary>
     /// <param name="rawData">The raw user data to clean</param>
     /// <returns>A list of cleaned user data</returns>
     public List<CleanedUserData> CleanData(List<UserData> rawData)
     {
-        return rawData.Select(data => new CleanedUserData
-        {
-            Id = data.Id,
-            Name = data.Name
-        }).ToList();
+        return rawData
+            .Select(data => new CleanedUserData
+            {
+                Id = data.Id, Name = data.Name
+            })
+            .ToList();
     }
 
     /// <summary>
-    /// Merges two lists of cleaned user data and sorts them by ID
+    /// Merges multiple lists of cleaned user data, removes duplicates, and sorts them by 'name' and then 'id'
     /// </summary>
-    /// <param name="data1">The first list of cleaned user data</param>
-    /// <param name="data2">The second list of cleaned user data</param>
-    /// <returns>A merged and sorted list of cleaned user data</returns>
-    public List<CleanedUserData> MergeAndSortData(List<CleanedUserData> data1, List<CleanedUserData> data2)
+    /// <param name="dataLists">The lists of cleaned user data to merge</param>
+    /// <returns>A merged, deduplicated, and sorted list of cleaned user data</returns>
+    public List<CleanedUserData> MergeAndSortData(params List<CleanedUserData>[] dataLists)
     {
-        return data1.Concat(data2)
-            .OrderBy(data => data.Id)
+        return dataLists
+            .SelectMany(list => list) // Flatten all lists into one
+            .GroupBy(data => new
+            {
+                data.Id, data.Name
+            }) // Group by both ID and Name to remove duplicates
+            .Select(group => group.First()) // Take the first occurrence of each unique combination
+            .OrderBy(data => data.Name) // Sort by name first
+            .ThenBy(data => data.Id) // Then by ID
             .ToList();
+    }
+
+    /// <summary>
+    /// Processes raw data by cleaning and sorting it
+    /// </summary>
+    /// <param name="rawData">The raw user data to process</param>
+    /// <returns>A processed list of cleaned user data</returns>
+    public List<CleanedUserData> ProcessData(List<UserData> rawData)
+    {
+        var cleanedData = CleanData(rawData);
+        return MergeAndSortData(cleanedData);
     }
 }

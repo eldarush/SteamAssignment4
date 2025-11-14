@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using System.ComponentModel.DataAnnotations;
@@ -32,8 +31,12 @@ public class ConfigurationService : IConfigurationService
         if (_appConfig != null)
             return _appConfig;
 
-        // Use provided path, constructor path, or default path
-        var path = configPath ?? _configPath ?? GetDefaultConfigPath();
+        // Use provided path or constructor path (no default paths)
+        var path = configPath ?? _configPath;
+
+        // Require a path to be provided
+        if (string.IsNullOrEmpty(path))
+            throw new InvalidOperationException("Configuration file path must be provided");
 
         if (File.Exists(path))
         {
@@ -43,37 +46,16 @@ public class ConfigurationService : IConfigurationService
                 .Build();
 
             _appConfig = deserializer.Deserialize<AppConfig>(yamlContent);
-            
+
             // Validate the configuration
             ValidateConfiguration(_appConfig);
-            
+
             return _appConfig;
         }
 
         throw new InvalidOperationException($"Configuration file not found at {path}");
     }
-    
-    /// <summary>
-    /// Gets the default configuration file path
-    /// </summary>
-    /// <returns>The default configuration file path</returns>
-    private string GetDefaultConfigPath()
-    {
-        // Look for configuration file in the current directory first
-        var currentDirConfig = Path.Combine(Environment.CurrentDirectory, "rabbitmq-config.yaml");
-        if (File.Exists(currentDirConfig))
-            return currentDirConfig;
-            
-        // If not found, look in the executable directory
-        var execDirConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rabbitmq-config.yaml");
-        if (File.Exists(execDirConfig))
-            return execDirConfig;
-            
-        // If still not found, look in a config subdirectory
-        var configDirConfig = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "rabbitmq-config.yaml");
-        return configDirConfig;
-    }
-    
+
     /// <summary>
     /// Validates the configuration using data annotations
     /// </summary>
@@ -82,57 +64,41 @@ public class ConfigurationService : IConfigurationService
     {
         var validationContext = new ValidationContext(config);
         var validationResults = new List<ValidationResult>();
-        
+
         if (!Validator.TryValidateObject(config, validationContext, validationResults, validateAllProperties: true))
         {
             var errors = validationResults.Select(r => r.ErrorMessage);
             throw new InvalidOperationException($"Configuration validation failed: {string.Join(", ", errors)}");
         }
-        
+
         // Additional custom validations
-        if (config.Input?.Queues == null || config.Input.Queues.Count == 0)
+        if (config.Consumers == null || config.Consumers.Count == 0)
+            throw new InvalidOperationException("At least one consumer must be configured");
+
+        foreach (var consumer in config.Consumers)
         {
-            throw new InvalidOperationException("At least one input queue must be configured");
+            if (string.IsNullOrEmpty(consumer.Endpoint))
+                throw new InvalidOperationException("Consumer endpoint cannot be null or empty");
+
+            if (string.IsNullOrEmpty(consumer.Format))
+                throw new InvalidOperationException("Consumer format cannot be null or empty");
+
+            if (!consumer.Format.Equals("json", StringComparison.OrdinalIgnoreCase) &&
+                !consumer.Format.Equals("yaml", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Consumer format must be 'json' or 'yaml', but was '{consumer.Format}'");
         }
-        
-        foreach (var queue in config.Input.Queues)
-        {
-            if (string.IsNullOrEmpty(queue.Name))
-            {
-                throw new InvalidOperationException("Input queue name cannot be null or empty");
-            }
-            
-            if (string.IsNullOrEmpty(queue.Type))
-            {
-                throw new InvalidOperationException("Input queue type cannot be null or empty");
-            }
-            
-            if (!queue.Type.Equals("queue", StringComparison.OrdinalIgnoreCase) && 
-                !queue.Type.Equals("exchange", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"Input queue type must be 'queue' or 'exchange', but was '{queue.Type}'");
-            }
-        }
-        
-        if (config.Output?.Destination == null)
-        {
-            throw new InvalidOperationException("Output destination must be configured");
-        }
-        
-        if (string.IsNullOrEmpty(config.Output.Destination.Name))
-        {
-            throw new InvalidOperationException("Output destination name cannot be null or empty");
-        }
-        
-        if (string.IsNullOrEmpty(config.Output.Destination.Type))
-        {
-            throw new InvalidOperationException("Output destination type cannot be null or empty");
-        }
-        
-        if (!config.Output.Destination.Type.Equals("queue", StringComparison.OrdinalIgnoreCase) && 
-            !config.Output.Destination.Type.Equals("exchange", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException($"Output destination type must be 'queue' or 'exchange', but was '{config.Output.Destination.Type}'");
-        }
+
+        if (config.Output == null)
+            throw new InvalidOperationException("Output configuration must be provided");
+
+        if (string.IsNullOrEmpty(config.Output.Endpoint))
+            throw new InvalidOperationException("Output endpoint cannot be null or empty");
+
+        if (string.IsNullOrEmpty(config.Output.Format))
+            throw new InvalidOperationException("Output format cannot be null or empty");
+
+        if (!config.Output.Format.Equals("json", StringComparison.OrdinalIgnoreCase) &&
+            !config.Output.Format.Equals("yaml", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Output format must be 'json' or 'yaml', but was '{config.Output.Format}'");
     }
 }

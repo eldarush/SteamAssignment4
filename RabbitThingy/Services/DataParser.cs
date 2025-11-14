@@ -23,7 +23,7 @@ public static class DataParser
             {
                 PropertyNameCaseInsensitive = true
             };
-                
+
             var data = JsonSerializer.Deserialize<List<UserData>>(jsonData, options);
             return data ?? [];
         }
@@ -48,12 +48,27 @@ public static class DataParser
                 .Build();
 
             var data = deserializer.Deserialize<List<UserData>>(yamlData);
-            return data;
+            return data ?? [];
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error parsing YAML data: {ex.Message}");
             return [];
         }
+    }
+
+    /// <summary>
+    /// Parses data based on the specified format into a list of UserData objects
+    /// </summary>
+    /// <param name="data">The data to parse</param>
+    /// <param name="format">The format of the data (json or yaml)</param>
+    /// <returns>A list of UserData objects</returns>
+    public static List<UserData> ParseData(string data, string format)
+    {
+        if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+            return ParseJsonData(data);
+        if (format.Equals("yaml", StringComparison.OrdinalIgnoreCase))
+            return ParseYamlData(data);
+        throw new ArgumentException($"Unsupported format: {format}. Supported formats are 'json' and 'yaml'.");
     }
 }

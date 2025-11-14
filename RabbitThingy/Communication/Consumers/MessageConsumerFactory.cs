@@ -7,42 +7,76 @@ namespace RabbitThingy.Communication.Consumers;
 /// </summary>
 public class MessageConsumerFactory
 {
-    private readonly IEnumerable<IMessageConsumer> _consumers;
-
     /// <summary>
     /// Initializes a new instance of the MessageConsumerFactory class
     /// </summary>
-    /// <param name="consumers">The collection of message consumers</param>
-    public MessageConsumerFactory(IEnumerable<IMessageConsumer> consumers)
-    {
-        _consumers = consumers;
-    }
+    public MessageConsumerFactory() { }
 
     /// <summary>
-    /// Creates a consumer of the specified type
+    /// Creates a consumer based on endpoint and format
     /// </summary>
-    /// <param name="type">The type of consumer to create</param>
+    /// <param name="endpoint">The endpoint to connect to</param>
+    /// <param name="format">The format of the data (json or yaml)</param>
+    /// <param name="sourceType">The type of source (queue or exchange)</param>
     /// <returns>The created consumer</returns>
-    private IMessageConsumer CreateConsumer(string type)
+    private static IMessageConsumer CreateConsumer(string endpoint, string format, string sourceType = "queue")
     {
-        var consumer = _consumers.FirstOrDefault(c => c.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
+        // Parse endpoint to extract connection details
+        // Expected format: amqp://username:password@hostname:port/queue
+        var uri = new Uri(endpoint);
+        var userInfo = uri.UserInfo.Split(':');
 
-        if (consumer == null)
-            throw new NotSupportedException($"Consumer type '{type}' is not supported.");
+        // Require both username and password to be provided
+        if (userInfo.Length < 2)
+            throw new InvalidOperationException("Both username and password must be provided in the endpoint URI");
 
-        return consumer;
+        var username = userInfo[0];
+        var password = userInfo[1];
+        var hostname = uri.Host;
+        var port = uri.Port;
+
+        return new RabbitMqConsumerService(hostname, port, username, password, format, sourceType);
     }
 
     /// <summary>
-    /// Starts consuming messages using a consumer of the specified type
+    /// Starts consuming messages using a consumer based on endpoint and format
     /// </summary>
-    /// <param name="type">The type of consumer to use</param>
-    /// <param name="source">The source to consume from</param>
+    /// <param name="endpoint">The endpoint to connect to</param>
+    /// <param name="format">The format of the data (json or yaml)</param>
+    /// <param name="sourceName">The source name to consume from</param>
+    /// <param name="sourceType">The type of source (queue or exchange)</param>
     /// <param name="messageBuffer">The buffer to add consumed messages to</param>
     /// <param name="cancellationToken">Cancellation token to stop consumption</param>
-    public async Task StartConsumingAsync(string type, string source, ConcurrentBag<Models.UserData> messageBuffer, CancellationToken cancellationToken)
+    public async static Task StartConsumingAsync(string endpoint, string format, string sourceName, string sourceType, ConcurrentBag<Models.UserData> messageBuffer,
+        CancellationToken cancellationToken)
     {
-        var consumer = CreateConsumer(type);
-        await consumer.ConsumeContinuouslyAsync(source, messageBuffer, cancellationToken);
+        var consumer = CreateConsumer(endpoint, format, sourceType);
+        if (consumer is IDisposable disposable)
+        {
+            using (disposable)
+            {
+                if (consumer is RabbitMqConsumerService rabbitConsumer)
+                {
+                    await rabbitConsumer.ConsumeContinuouslyAsync(sourceName, sourceType, messageBuffer, cancellationToken);
+                }
+                else
+                {
+                    // Fallback to default behavior for backward compatibility
+                    await consumer.ConsumeContinuouslyAsync(sourceName, messageBuffer, cancellationToken);
+                }
+            }
+        }
+        else
+        {
+            if (consumer is RabbitMqConsumerService rabbitConsumer)
+            {
+                await rabbitConsumer.ConsumeContinuouslyAsync(sourceName, sourceType, messageBuffer, cancellationToken);
+            }
+            else
+            {
+                // Fallback to default behavior for backward compatibility
+                await consumer.ConsumeContinuouslyAsync(sourceName, messageBuffer, cancellationToken);
+            }
+        }
     }
 }

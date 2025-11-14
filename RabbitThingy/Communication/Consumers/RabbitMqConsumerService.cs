@@ -1,138 +1,60 @@
-using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitThingy.Models;
 using System.Text;
-using System.Text.Json;
 using System.Collections.Concurrent;
-using RabbitThingy.Configuration;
+using RabbitThingy.Services;
+using RabbitThingy.Messaging;
 
 namespace RabbitThingy.Communication.Consumers;
 
 /// <summary>
 /// RabbitMQ implementation of IMessageConsumer
 /// </summary>
-public class RabbitMqConsumerService : IMessageConsumer, IDisposable
+public class RabbitMqConsumerService : IMessageConsumer, IRabbitMqCommunication, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
-    private readonly int _batchTimeoutSeconds;
-    private readonly int _maxBatchMessages;
-    private readonly RabbitMqConfig _config;
+    private readonly string _format;
 
     /// <summary>
     /// Gets the type of the consumer
     /// </summary>
-    public string Type => "RabbitMQ";
+    public MessageType MessageType { get; }
 
     /// <summary>
     /// Initializes a new instance of the RabbitMqConsumerService class
     /// </summary>
-    /// <param name="configurationService">The configuration service</param>
-    public RabbitMqConsumerService(IConfigurationService configurationService)
+    /// <param name="hostname">The RabbitMQ hostname</param>
+    /// <param name="port">The RabbitMQ port</param>
+    /// <param name="username">The RabbitMQ username</param>
+    /// <param name="password">The RabbitMQ password</param>
+    /// <param name="format">The data format for this consumer (json or yaml)</param>
+    /// <param name="sourceType">The type of source (queue or exchange)</param>
+    public RabbitMqConsumerService(string hostname, int port, string username, string password, string format, string sourceType = "queue")
     {
-        var appConfig = configurationService.LoadConfiguration();
-        _config = appConfig.RabbitMq ?? throw new InvalidOperationException("RabbitMQ configuration is required");
-
         // Validate required properties
-        if (string.IsNullOrEmpty(_config.Hostname))
+        if (string.IsNullOrEmpty(hostname))
             throw new InvalidOperationException("RabbitMQ Hostname is required");
-        if (string.IsNullOrEmpty(_config.Username))
+        if (string.IsNullOrEmpty(username))
             throw new InvalidOperationException("RabbitMQ Username is required");
-        if (string.IsNullOrEmpty(_config.Password))
+        if (string.IsNullOrEmpty(password))
             throw new InvalidOperationException("RabbitMQ Password is required");
+        if (string.IsNullOrEmpty(format))
+            throw new InvalidOperationException("Format is required");
 
-        // Load batching configuration with validation
-        var batchingConfig = appConfig.Processing?.Batching ?? throw new InvalidOperationException("Batching configuration is required");
-        _batchTimeoutSeconds = batchingConfig.TimeoutSeconds;
-        _maxBatchMessages = batchingConfig.MaxMessages;
+        _format = format.ToLower();
+        
+        // Set the message type based on source type
+        MessageType = sourceType.Equals("exchange", StringComparison.OrdinalIgnoreCase) ? MessageType.Exchange : MessageType.Queue;
 
         var factory = new ConnectionFactory
         {
-            HostName = _config.Hostname,
-            Port = _config.Port,
-            UserName = _config.Username,
-            Password = _config.Password
+            HostName = hostname, Port = port, UserName = username, Password = password
         };
 
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
-    }
-
-    /// <summary>
-    /// Consumes messages from a queue
-    /// </summary>
-    /// <param name="queueName">The name of the queue to consume from</param>
-    /// <returns>A list of consumed UserData objects</returns>
-    private async Task<List<UserData>> ConsumeFromQueueAsync(string queueName)
-    {
-        var dataList = new List<UserData>();
-
-        // Ensure queue exists by declaring it
-        _channel.QueueDeclare(queue: queueName,
-                             durable: true,
-                             exclusive: false,
-                             autoDelete: false,
-                             arguments: null);
-
-        var consumer = new EventingBasicConsumer(_channel);
-
-        var messageCount = 0;
-        var tcs = new TaskCompletionSource<bool>();
-
-        consumer.Received += (_, ea) =>
-        {
-            var body = ea.Body.ToArray();
-            var message = Encoding.UTF8.GetString(body);
-
-            try
-            {
-                // Try to deserialize as List<UserData> first
-                var userDataList = JsonSerializer.Deserialize<List<UserData>>(message);
-                if (userDataList != null)
-                    dataList.AddRange(userDataList);
-                else
-                {
-                    // Try to deserialize as single UserData
-                    var userData = JsonSerializer.Deserialize<UserData>(message);
-                    if (userData != null)
-                        dataList.Add(userData);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Handle JSON deserialization errors
-                Console.WriteLine($"Error deserializing message: {ex.Message}");
-            }
-
-            _channel.BasicAck(ea.DeliveryTag, false);
-
-            messageCount++;
-            // Stop after receiving the configured maximum number of messages
-            if (messageCount >= _maxBatchMessages)
-            {
-                _channel.BasicCancel(consumer.ConsumerTags[0]);
-                tcs.SetResult(true);
-            }
-        };
-
-        var consumerTag = _channel.BasicConsume(queue: queueName,
-            autoAck: false,
-            consumer: consumer);
-
-        // Wait for the configured timeout period or until we reach the message limit
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_batchTimeoutSeconds));
-        try
-        {
-            await Task.WhenAny(Task.Delay(Timeout.Infinite, cts.Token), tcs.Task);
-        }
-        catch (OperationCanceledException)
-        {
-            // Timeout reached, cancel consumer
-            _channel.BasicCancel(consumerTag);
-        }
-
-        return dataList;
     }
 
     /// <summary>
@@ -141,14 +63,14 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
     /// <param name="queueName">The name of the queue to consume from</param>
     /// <param name="messageBuffer">The buffer to add consumed messages to</param>
     /// <param name="cancellationToken">Cancellation token to stop consumption</param>
-    public async Task ConsumeContinuouslyAsync(string queueName, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
+    private async Task ConsumeContinuouslyFromQueueAsync(string queueName, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
     {
         // Ensure queue exists by declaring it
         _channel.QueueDeclare(queue: queueName,
-                             durable: true,
-                             exclusive: false,
-                             autoDelete: false,
-                             arguments: null);
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: null);
 
         var consumer = new EventingBasicConsumer(_channel);
 
@@ -159,22 +81,15 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
 
             try
             {
-                // Try to deserialize as List<UserData> first
-                var userDataList = JsonSerializer.Deserialize<List<UserData>>(message);
+                // Parse data based on the configured format
+                var userDataList = DataParser.ParseData(message, _format);
                 if (userDataList != null)
                     foreach (var userData in userDataList)
                         messageBuffer.Add(userData);
-                else
-                {
-                    // Try to deserialize as single UserData
-                    var userData = JsonSerializer.Deserialize<UserData>(message);
-                    if (userData != null)
-                        messageBuffer.Add(userData);
-                }
             }
             catch (Exception ex)
             {
-                // Handle JSON deserialization errors
+                // Handle deserialization errors
                 Console.WriteLine($"Error deserializing message: {ex.Message}");
             }
 
@@ -198,18 +113,96 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
     }
 
     /// <summary>
-    /// Consumes messages from a source
+    /// Continuously consumes messages from an exchange by creating a temporary queue and binding it to the exchange
     /// </summary>
-    /// <param name="source">The source to consume from</param>
-    /// <returns>A list of consumed UserData objects</returns>
-    public async Task<List<UserData>> ConsumeAsync(string source) => await ConsumeFromQueueAsync(source);
+    /// <param name="exchangeName">The name of the exchange to consume from</param>
+    /// <param name="messageBuffer">The buffer to add consumed messages to</param>
+    /// <param name="cancellationToken">Cancellation token to stop consumption</param>
+    private async Task ConsumeContinuouslyFromExchangeAsync(string exchangeName, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
+    {
+        // Declare the exchange
+        _channel.ExchangeDeclare(exchange: exchangeName,
+            type: ExchangeType.Fanout,
+            durable: true,
+            autoDelete: false,
+            arguments: null);
+
+        // Create a temporary queue and bind it to the exchange
+        var queueName = _channel.QueueDeclare().QueueName;
+        _channel.QueueBind(queue: queueName, exchange: exchangeName, routingKey: "");
+
+        var consumer = new EventingBasicConsumer(_channel);
+
+        consumer.Received += (_, ea) =>
+        {
+            var body = ea.Body.ToArray();
+            var message = Encoding.UTF8.GetString(body);
+
+            try
+            {
+                // Parse data based on the configured format
+                var userDataList = DataParser.ParseData(message, _format);
+                if (userDataList != null)
+                    foreach (var userData in userDataList)
+                        messageBuffer.Add(userData);
+            }
+            catch (Exception ex)
+            {
+                // Handle deserialization errors
+                Console.WriteLine($"Error deserializing message: {ex.Message}");
+            }
+
+            _channel.BasicAck(ea.DeliveryTag, false);
+        };
+
+        var consumerTag = _channel.BasicConsume(queue: queueName,
+            autoAck: false,
+            consumer: consumer);
+
+        // Wait until cancellation is requested
+        try
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when cancellation is requested
+            _channel.BasicCancel(consumerTag);
+        }
+    }
+
+    /// <summary>
+    /// Continuously consumes messages from a source (queue or exchange) and adds them to a buffer
+    /// </summary>
+    /// <param name="sourceName">The name of the source to consume from</param>
+    /// <param name="sourceType">The type of source (queue or exchange)</param>
+    /// <param name="messageBuffer">The buffer to add consumed messages to</param>
+    /// <param name="cancellationToken">Cancellation token to stop consumption</param>
+    public async Task ConsumeContinuouslyAsync(string sourceName, string sourceType, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
+    {
+        if (sourceType.Equals("exchange", StringComparison.OrdinalIgnoreCase))
+            await ConsumeContinuouslyFromExchangeAsync(sourceName, messageBuffer, cancellationToken);
+        else
+            await ConsumeContinuouslyFromQueueAsync(sourceName, messageBuffer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Backward compatibility method for continuously consuming messages from a queue
+    /// </summary>
+    /// <param name="queueName">The name of the queue to consume from</param>
+    /// <param name="messageBuffer">The buffer to add consumed messages to</param>
+    /// <param name="cancellationToken">Cancellation token to stop consumption</param>
+    public async Task ConsumeContinuouslyAsync(string queueName, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
+    {
+        await ConsumeContinuouslyFromQueueAsync(queueName, messageBuffer, cancellationToken);
+    }
 
     /// <summary>
     /// Disposes of the RabbitMQ connection and channel
     /// </summary>
     public void Dispose()
     {
-        _channel.Close();
-        _connection.Close();
+        _channel?.Close();
+        _connection?.Close();
     }
 }

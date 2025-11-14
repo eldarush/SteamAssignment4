@@ -25,18 +25,19 @@ This project implements an asynchronous data integration system using RabbitMQ. 
 ## Configuration
 
 The system requires all configuration to be present in a YAML configuration file. 
-An example configuration file is provided in `RabbitThingy/Configuration/Yaml/rabbitmq-config.yaml`.
+An example configuration file is provided in `Example/config.yaml`.
 
 The configuration file must contain:
+- Multiple consumers with different formats (JSON and YAML)
 - RabbitMQ connection settings (hostname, port, username, password)
-- Input queue names (queue1, queue2)
-- Output exchange name ("exchange")
+- Output exchange name ("output.exchange")
 - Output file size limit
 
 ## Requirements
 
 - RabbitMQ server running on localhost:5672 with username/password: guest/guest
-- Pre-existing queues (queue1, queue2) and exchange ("exchange") of type fanout
+- RabbitMQ server running on localhost:5673 with username/password: guest/guest
+- Pre-existing queues (queue1, queue2) and exchange ("output.exchange") of type fanout
 - All configuration values must be present in the YAML configuration file (no defaults)
 
 ## Running the Application
@@ -55,7 +56,19 @@ RabbitThingy.exe <path-to-config-file>
 
 Example:
 ```
-dotnet run --project RabbitThingy/RabbitThingy.csproj -- RabbitThingy/Configuration/Yaml/rabbitmq-config.yaml
+dotnet run --project RabbitThingy/RabbitThingy.csproj -- Example/config.yaml
+```
+
+## Example Configuration
+
+An example folder is provided with a complete configuration file that showcases all functionality:
+
+- `Example/config.yaml` - Complete configuration demonstrating multiple consumers with different formats
+
+To run the application with the example configuration:
+
+```
+dotnet run --project RabbitThingy/RabbitThingy.csproj -- Example/config.yaml
 ```
 
 ## Expected Output

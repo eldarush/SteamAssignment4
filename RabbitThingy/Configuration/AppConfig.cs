@@ -1,5 +1,5 @@
-using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using YamlDotNet.Serialization;
 
 namespace RabbitThingy.Configuration;
 
@@ -9,99 +9,44 @@ namespace RabbitThingy.Configuration;
 public class AppConfig
 {
     /// <summary>
-    /// Gets or sets the RabbitMQ configuration
+    /// Gets or sets the list of consumers
     /// </summary>
     [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "rabbitmq")]
-    public RabbitMqConfig RabbitMq { get; set; } = null!;
-
-    /// <summary>
-    /// Gets or sets the input configuration
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "input")]
-    public InputConfig Input { get; set; } = null!;
+    [YamlMember(Alias = "consumers")]
+    public List<ConsumerConfig> Consumers { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the output configuration
     /// </summary>
     [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "output")]
+    [YamlMember(Alias = "output")]
     public OutputConfig Output { get; set; } = null!;
-
-    /// <summary>
-    /// Gets or sets the processing configuration
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "processing")]
-    public ProcessingConfig Processing { get; set; } = null!;
 }
 
 /// <summary>
-/// Represents RabbitMQ connection configuration
+/// Represents a consumer configuration
 /// </summary>
-public class RabbitMqConfig
+public class ConsumerConfig
 {
     /// <summary>
-    /// Gets or sets the hostname of the RabbitMQ server
+    /// Gets or sets the endpoint of the consumer
     /// </summary>
     [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "hostname")]
-    public string Hostname { get; set; } = null!;
+    [YamlMember(Alias = "endpoint")]
+    public string Endpoint { get; set; } = null!;
 
     /// <summary>
-    /// Gets or sets the port of the RabbitMQ server
+    /// Gets or sets the format of the consumer data (json or yaml)
     /// </summary>
     [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "port")]
-    public int Port { get; set; }
+    [YamlMember(Alias = "format")]
+    public string Format { get; set; } = null!;
 
     /// <summary>
-    /// Gets or sets the username for RabbitMQ authentication
+    /// Gets or sets the type of the source (queue or exchange)
     /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "username")]
-    public string Username { get; set; } = null!;
-
-    /// <summary>
-    /// Gets or sets the password for RabbitMQ authentication
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "password")]
-    public string Password { get; set; } = null!;
-}
-
-/// <summary>
-/// Represents input configuration
-/// </summary>
-public class InputConfig
-{
-    /// <summary>
-    /// Gets or sets the list of input queues
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "queues")]
-    public List<InputQueue> Queues { get; set; } = null!;
-}
-
-/// <summary>
-/// Represents an input queue configuration
-/// </summary>
-public class InputQueue
-{
-    /// <summary>
-    /// Gets or sets the name of the queue
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "name")]
-    public string Name { get; set; } = null!;
-
-    /// <summary>
-    /// Gets or sets the type of the input source
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "type")]
-    public string Type { get; set; } = null!;
+    [YamlMember(Alias = "sourceType")]
+    public string SourceType { get; set; } = "queue";
 }
 
 /// <summary>
@@ -110,76 +55,22 @@ public class InputQueue
 public class OutputConfig
 {
     /// <summary>
-    /// Gets or sets the output destination configuration
+    /// Gets or sets the endpoint of the output
     /// </summary>
     [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "destination")]
-    public OutputDestination Destination { get; set; } = null!;
-}
-
-/// <summary>
-/// Represents output destination configuration
-/// </summary>
-public class OutputDestination
-{
-    /// <summary>
-    /// Gets or sets the name of the destination
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "name")]
-    public string Name { get; set; } = null!;
+    [YamlMember(Alias = "endpoint")]
+    public string Endpoint { get; set; } = null!;
 
     /// <summary>
-    /// Gets or sets the type of the destination
+    /// Gets or sets the output format (json or yaml)
     /// </summary>
     [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "type")]
-    public string Type { get; set; } = null!;
+    [YamlMember(Alias = "format")]
+    public string Format { get; set; } = null!;
 
     /// <summary>
-    /// Gets or sets the routing key for exchanges
+    /// Gets or sets the type of the destination (queue or exchange)
     /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "routingKey")]
-    public string RoutingKey { get; set; } = null!;
-}
-
-/// <summary>
-/// Represents processing configuration
-/// </summary>
-public class ProcessingConfig
-{
-    /// <summary>
-    /// Gets or sets the output file size limit
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "outputFileSizeLimit")]
-    public int OutputFileSizeLimit { get; set; }
-
-    /// <summary>
-    /// Gets or sets the batching configuration
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "batching")]
-    public BatchingConfig Batching { get; set; } = null!;
-}
-
-/// <summary>
-/// Represents batching configuration
-/// </summary>
-public class BatchingConfig
-{
-    /// <summary>
-    /// Gets or sets the timeout in seconds for batching
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "timeoutSeconds")]
-    public int TimeoutSeconds { get; set; }
-
-    /// <summary>
-    /// Gets or sets the maximum number of messages per batch
-    /// </summary>
-    [Required]
-    [YamlDotNet.Serialization.YamlMember(Alias = "maxMessages")]
-    public int MaxMessages { get; set; }
+    [YamlMember(Alias = "destinationType")]
+    public string DestinationType { get; set; } = "exchange";
 }
