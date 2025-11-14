@@ -5,8 +5,16 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace RabbitThingy.Services;
 
+/// <summary>
+/// Utility class for parsing data from various formats
+/// </summary>
 public static class DataParser
 {
+    /// <summary>
+    /// Parses JSON data into a list of UserData objects
+    /// </summary>
+    /// <param name="jsonData">The JSON data to parse</param>
+    /// <returns>A list of UserData objects</returns>
     public static List<UserData> ParseJsonData(string jsonData)
     {
         try
@@ -26,6 +34,11 @@ public static class DataParser
         }
     }
 
+    /// <summary>
+    /// Parses YAML data into a list of UserData objects
+    /// </summary>
+    /// <param name="yamlData">The YAML data to parse</param>
+    /// <returns>A list of UserData objects</returns>
     public static List<UserData> ParseYamlData(string yamlData)
     {
         try

@@ -5,57 +5,75 @@ using RabbitThingy.Models;
 using System.Text;
 using System.Text.Json;
 using System.Collections.Concurrent;
-using RabbitThingy.Configuration.RabbitMQ;
+using RabbitThingy.Configuration;
 
 namespace RabbitThingy.Communication.Consumers;
 
+/// <summary>
+/// RabbitMQ implementation of IMessageConsumer
+/// </summary>
 public class RabbitMqConsumerService : IMessageConsumer, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
     private readonly int _batchTimeoutSeconds;
     private readonly int _maxBatchMessages;
+    private readonly RabbitMqConfig _config;
 
+    /// <summary>
+    /// Gets the type of the consumer
+    /// </summary>
     public string Type => "RabbitMQ";
 
-    public RabbitMqConsumerService(IConfiguration configuration)
+    /// <summary>
+    /// Initializes a new instance of the RabbitMqConsumerService class
+    /// </summary>
+    /// <param name="configurationService">The configuration service</param>
+    public RabbitMqConsumerService(IConfigurationService configurationService)
     {
-        var config =
-            // Load configuration into the config object
-            new RabbitMqConfig
-            {
-                HostName = configuration["RabbitMqConfig:HostName"] ?? throw new InvalidOperationException("RabbitMqConfig:HostName is required in appsettings.json"),
-                Port = configuration.GetValue<int>("RabbitMqConfig:Port"),
-                UserName = configuration["RabbitMqConfig:UserName"] ?? throw new InvalidOperationException("RabbitMqConfig:UserName is required in appsettings.json"),
-                Password = configuration["RabbitMqConfig:Password"] ?? throw new InvalidOperationException("RabbitMqConfig:Password is required in appsettings.json")
-            };
+        var appConfig = configurationService.LoadConfiguration();
+        _config = appConfig.RabbitMq ?? throw new InvalidOperationException("RabbitMQ configuration is required");
 
-        // Load batching configuration with default values
-        _batchTimeoutSeconds = configuration.GetValue<int>("Batching:TimeoutSeconds", 5);
-        _maxBatchMessages = configuration.GetValue<int>("Batching:MaxMessages", 10);
+        // Validate required properties
+        if (string.IsNullOrEmpty(_config.Hostname))
+            throw new InvalidOperationException("RabbitMQ Hostname is required");
+        if (string.IsNullOrEmpty(_config.Username))
+            throw new InvalidOperationException("RabbitMQ Username is required");
+        if (string.IsNullOrEmpty(_config.Password))
+            throw new InvalidOperationException("RabbitMQ Password is required");
+
+        // Load batching configuration with validation
+        var batchingConfig = appConfig.Processing?.Batching ?? throw new InvalidOperationException("Batching configuration is required");
+        _batchTimeoutSeconds = batchingConfig.TimeoutSeconds;
+        _maxBatchMessages = batchingConfig.MaxMessages;
 
         var factory = new ConnectionFactory
         {
-            HostName = config.HostName, Port = config.Port, UserName = config.UserName, Password = config.Password
+            HostName = _config.Hostname,
+            Port = _config.Port,
+            UserName = _config.Username,
+            Password = _config.Password
         };
 
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
     }
 
+    /// <summary>
+    /// Consumes messages from a queue
+    /// </summary>
+    /// <param name="queueName">The name of the queue to consume from</param>
+    /// <returns>A list of consumed UserData objects</returns>
     private async Task<List<UserData>> ConsumeFromQueueAsync(string queueName)
     {
         var dataList = new List<UserData>();
 
-        try
-        {
-            // Check if queue exists by attempting to declare it passively
-            _channel.QueueDeclarePassive(queueName);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Queue '{queueName}' does not exist or is not accessible.", ex);
-        }
+        // Ensure queue exists by declaring it
+        _channel.QueueDeclare(queue: queueName,
+                             durable: true,
+                             exclusive: false,
+                             autoDelete: false,
+                             arguments: null);
 
         var consumer = new EventingBasicConsumer(_channel);
 
@@ -117,17 +135,20 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
         return dataList;
     }
 
+    /// <summary>
+    /// Continuously consumes messages from a queue and adds them to a buffer
+    /// </summary>
+    /// <param name="queueName">The name of the queue to consume from</param>
+    /// <param name="messageBuffer">The buffer to add consumed messages to</param>
+    /// <param name="cancellationToken">Cancellation token to stop consumption</param>
     public async Task ConsumeContinuouslyAsync(string queueName, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
     {
-        try
-        {
-            // Check if queue exists by attempting to declare it passively
-            _channel.QueueDeclarePassive(queueName);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Queue '{queueName}' does not exist or is not accessible.", ex);
-        }
+        // Ensure queue exists by declaring it
+        _channel.QueueDeclare(queue: queueName,
+                             durable: true,
+                             exclusive: false,
+                             autoDelete: false,
+                             arguments: null);
 
         var consumer = new EventingBasicConsumer(_channel);
 
@@ -176,8 +197,16 @@ public class RabbitMqConsumerService : IMessageConsumer, IDisposable
         }
     }
 
+    /// <summary>
+    /// Consumes messages from a source
+    /// </summary>
+    /// <param name="source">The source to consume from</param>
+    /// <returns>A list of consumed UserData objects</returns>
     public async Task<List<UserData>> ConsumeAsync(string source) => await ConsumeFromQueueAsync(source);
 
+    /// <summary>
+    /// Disposes of the RabbitMQ connection and channel
+    /// </summary>
     public void Dispose()
     {
         _channel.Close();

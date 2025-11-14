@@ -1,14 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Communication.Publishers;
 using RabbitThingy.Services;
-using RabbitThingy.Workers;
 using RabbitThingy.Messaging;
 using RabbitThingy.DataProcessing;
 using Serilog;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
+using RabbitThingy.Configuration;
 
 namespace RabbitThingy;
 
@@ -16,53 +14,63 @@ public class Program
 {
     public async static Task Main(string[] args)
     {
-        var host = CreateHostBuilder(args).Build();
-        await host.RunAsync();
+        // Check if a configuration file path is provided as an argument
+        if (args.Length == 0)
+        {
+            Console.WriteLine("Error: Configuration file path is required.");
+            Console.WriteLine("Usage: RabbitThingy.exe <path-to-config-file>");
+            Environment.Exit(1);
+        }
+        
+        string configPath = args[0];
+        
+        // Create service collection and configure services
+        var services = new ServiceCollection();
+        ConfigureServices(services, configPath);
+        
+        // Build service provider
+        var serviceProvider = services.BuildServiceProvider();
+        
+        // Get the data integration service and start it
+        var dataIntegrationService = serviceProvider.GetRequiredService<DataIntegrationService>();
+        await dataIntegrationService.StartAsync(CancellationToken.None);
+        
+        // Keep the application running
+        await Task.Delay(Timeout.Infinite);
     }
+    
+    private static void ConfigureServices(IServiceCollection services, string configPath)
+    {
+        // Configure logging
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .WriteTo.Console()
+            .CreateLogger();
+            
+        services.AddLogging(builder =>
+        {
+            builder.AddSerilog(Log.Logger, dispose: true);
+        });
 
-    private static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .UseSerilog((context, services, configuration) => configuration
-                .ReadFrom.Configuration(context.Configuration))
-            .ConfigureServices((hostContext, services) =>
-            {
-                // Register configuration
-                services.AddSingleton(hostContext.Configuration);
+        // Register configuration service with the required path
+        services.AddSingleton<IConfigurationService>(new ConfigurationService(configPath));
 
-                // Register services
-                services.AddSingleton<DataProcessingService>();
+        // Register services
+        services.AddSingleton<DataProcessingService>();
+        services.AddSingleton<DataIntegrationService>();
 
-                // Register consumers
-                services.AddTransient<IMessageConsumer, RabbitMqConsumerService>();
+        // Register consumers
+        services.AddTransient<IMessageConsumer, RabbitMqConsumerService>();
 
-                // Register publishers
-                services.AddTransient<IMessagePublisher, RabbitMqProducerService>();
+        // Register publishers
+        services.AddTransient<IMessagePublisher, RabbitMqProducerService>();
 
-                // Register factories
-                services.AddSingleton<MessageConsumerFactory>();
-                services.AddSingleton<MessagePublisherFactory>();
+        // Register factories
+        services.AddSingleton<MessageConsumerFactory>();
+        services.AddSingleton<MessagePublisherFactory>();
 
-                // Register facades
-                services.AddSingleton<MessagingFacade>();
-                services.AddSingleton<DataProcessingFacade>();
-
-                // Register worker with all dependencies
-                services.AddHostedService(serviceProvider =>
-                {
-                    var logger = serviceProvider.GetRequiredService<ILogger<DataIntegrationWorker>>();
-                    var messagingFacade = serviceProvider.GetRequiredService<MessagingFacade>();
-                    var dataProcessingFacade = serviceProvider.GetRequiredService<DataProcessingFacade>();
-                    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-                    var consumerFactory = serviceProvider.GetRequiredService<MessageConsumerFactory>();
-                    var publisherFactory = serviceProvider.GetRequiredService<MessagePublisherFactory>();
-                    
-                    return new DataIntegrationWorker(
-                        logger,
-                        messagingFacade,
-                        dataProcessingFacade,
-                        configuration,
-                        consumerFactory,
-                        publisherFactory);
-                });
-            });
+        // Register facades
+        services.AddSingleton<MessagingFacade>();
+        services.AddSingleton<DataProcessingFacade>();
+    }
 }

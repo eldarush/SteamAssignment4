@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using Moq;
 using RabbitThingy.Communication.Publishers;
-using Microsoft.Extensions.Configuration;
 using RabbitThingy.Models;
 
 namespace RabbitThingy.Tests;
@@ -10,13 +9,11 @@ namespace RabbitThingy.Tests;
 public class MessagePublisherFactoryTests
 {
     private Mock<IMessagePublisher> _mockPublisher;
-    private Mock<IConfiguration> _mockConfiguration;
 
     [SetUp]
     public void Setup()
     {
         _mockPublisher = new Mock<IMessagePublisher>();
-        _mockConfiguration = new Mock<IConfiguration>();
     }
 
     [Test]
@@ -29,7 +26,7 @@ public class MessagePublisherFactoryTests
         };
 
         // Act & Assert
-        Assert.DoesNotThrow(() => new MessagePublisherFactory(publishers, _mockConfiguration.Object));
+        Assert.DoesNotThrow(() => new MessagePublisherFactory(publishers));
     }
 
     [Test]
@@ -41,7 +38,7 @@ public class MessagePublisherFactoryTests
         {
             _mockPublisher.Object
         };
-        var factory = new MessagePublisherFactory(publishers, _mockConfiguration.Object);
+        var factory = new MessagePublisherFactory(publishers);
         var data = new List<CleanedUserData>();
         var destination = "test-destination";
 
@@ -57,7 +54,7 @@ public class MessagePublisherFactoryTests
     {
         // Arrange
         var publishers = Array.Empty<IMessagePublisher>();
-        var factory = new MessagePublisherFactory(publishers, _mockConfiguration.Object);
+        var factory = new MessagePublisherFactory(publishers);
 
         // Act & Assert
         var ex = Assert.ThrowsAsync<NotSupportedException>(async () => await factory.PublishAsync("UnsupportedType", [], "destination"));
