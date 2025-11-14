@@ -2,59 +2,46 @@ using NUnit.Framework;
 using Moq;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Configuration;
+using RabbitThingy.Models;
+using System.Collections.Concurrent;
+using RabbitThingy.Messaging;
 
 namespace RabbitThingy.Tests;
 
 [TestFixture]
 public class RabbitMqConsumerServiceTests
 {
-    private Mock<IConfigurationService> _mockConfigurationService;
-    private AppConfig _testConfig;
-
-    [SetUp]
-    public void Setup()
-    {
-        // Create a test configuration
-        _testConfig = new AppConfig
-        {
-            RabbitMq = new RabbitMqConfig
-            {
-                Hostname = "localhost",
-                Port = 5672,
-                Username = "guest",
-                Password = "guest"
-            },
-            Processing = new ProcessingConfig
-            {
-                Batching = new BatchingConfig
-                {
-                    TimeoutSeconds = 5,
-                    MaxMessages = 10
-                }
-            }
-        };
-
-        _mockConfigurationService = new Mock<IConfigurationService>();
-        _mockConfigurationService.Setup(cs => cs.LoadConfiguration(It.IsAny<string>())).Returns(_testConfig);
-    }
-
     [Test]
     public void Constructor_WithValidConfiguration_DoesNotThrow()
     {
         // Act & Assert
-        Assert.DoesNotThrow(() => new RabbitMqConsumerService(_mockConfigurationService.Object));
+        Assert.DoesNotThrow(() => new RabbitMqConsumerService("localhost", 5672, "guest", "guest", "json"));
     }
 
     [Test]
-    public void Type_ReturnsRabbitMQ()
+    public void MessageType_ReturnsQueueByDefault()
     {
         // Arrange
-        var consumerService = new RabbitMqConsumerService(_mockConfigurationService.Object);
+        var consumerService = new RabbitMqConsumerService("localhost", 5672, "guest", "guest", "json");
 
         // Act
-        var type = consumerService.Type;
+        var messageType = consumerService.MessageType;
 
         // Assert
-        Assert.That(type, Is.EqualTo("RabbitMQ"));
+        Assert.That(messageType, Is.EqualTo(MessageType.Queue));
     }
+    
+    [Test]
+    public void MessageType_ReturnsExchangeWhenSpecified()
+    {
+        // Arrange
+        var consumerService = new RabbitMqConsumerService("localhost", 5672, "guest", "guest", "json", "exchange");
+
+        // Act
+        var messageType = consumerService.MessageType;
+
+        // Assert
+        Assert.That(messageType, Is.EqualTo(MessageType.Exchange));
+    }
+    
 }

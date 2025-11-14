@@ -1,4 +1,5 @@
-using Microsoft.Extensions.Configuration;
+using RabbitThingy.Configuration;
+using RabbitThingy.Models;
 
 namespace RabbitThingy.Communication.Publishers;
 
@@ -7,69 +8,67 @@ namespace RabbitThingy.Communication.Publishers;
 /// </summary>
 public class MessagePublisherFactory
 {
-    private readonly IEnumerable<IMessagePublisher> _publishers;
+    private readonly IConfigurationService _configurationService;
 
     /// <summary>
     /// Initializes a new instance of the MessagePublisherFactory class
     /// </summary>
-    /// <param name="publishers">The collection of message publishers</param>
-    public MessagePublisherFactory(IEnumerable<IMessagePublisher> publishers)
+    /// <param name="configurationService">The configuration service</param>
+    public MessagePublisherFactory(IConfigurationService configurationService)
     {
-        _publishers = publishers;
+        _configurationService = configurationService;
     }
 
     /// <summary>
-    /// Creates a publisher of the specified type
+    /// Creates a RabbitMQ publisher
     /// </summary>
-    /// <param name="type">The type of publisher to create</param>
     /// <returns>The created publisher</returns>
-    private IMessagePublisher CreatePublisher(string type)
+    private IMessagePublisher CreatePublisher()
     {
-        var publisher = _publishers.FirstOrDefault(p => p.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
-            
-        if (publisher == null)
-            throw new NotSupportedException($"Publisher type '{type}' is not supported.");
+        // Get the configuration
+        var appConfig = _configurationService.LoadConfiguration(null);
 
-        return publisher;
+        // Use the endpoint from the output configuration
+        var endpoint = appConfig.Output?.Endpoint ??
+                       throw new InvalidOperationException("Output endpoint must be configured");
+
+        var destinationType = appConfig.Output?.DestinationType ?? "exchange";
+
+        return new RabbitMqProducerService(endpoint, destinationType);
     }
-    
+
     /// <summary>
-    /// Publishes data using a publisher of the specified type
+    /// Publishes data to a RabbitMQ destination based on configuration
     /// </summary>
-    /// <param name="type">The type of publisher to use</param>
     /// <param name="data">The data to publish</param>
-    /// <param name="destination">The destination to publish to</param>
-    public async Task PublishAsync(string type, List<Models.CleanedUserData> data, string destination)
+    /// <param name="destinationName">The destination name to publish to</param>
+    /// <param name="routingKey">The routing key to use</param>
+    public async Task PublishToExchangeAsync(List<CleanedUserData> data, string destinationName, string routingKey = "")
     {
-        var publisher = CreatePublisher(type);
-        await publisher.PublishAsync(data, destination);
-    }
-    
-    /// <summary>
-    /// Publishes data using a publisher of the specified type with destination type information
-    /// </summary>
-    /// <param name="type">The type of publisher to use</param>
-    /// <param name="data">The data to publish</param>
-    /// <param name="destination">The destination to publish to</param>
-    /// <param name="destinationType">The type of destination (queue or exchange)</param>
-    /// <param name="routingKey">The routing key to use for exchanges</param>
-    public async Task PublishAsync(string type, List<Models.CleanedUserData> data, string destination, string destinationType, string routingKey = "")
-    {
-        var publisher = CreatePublisher(type) as RabbitMqProducerService;
-        
-        if (publisher == null)
-            throw new NotSupportedException($"Publisher type '{type}' is not supported.");
-            
-        // Call the extended PublishAsync method
-        var rabbitPublisher = publisher as RabbitMqProducerService;
-        if (rabbitPublisher != null)
-        {
-            await rabbitPublisher.PublishAsync(data, destination, destinationType, routingKey);
-        }
+        // Get the configuration to determine the destination type
+        var appConfig = _configurationService.LoadConfiguration(null);
+        var destinationType = appConfig.Output?.DestinationType ?? "exchange";
+
+        var publisher = CreatePublisher();
+        if (publisher is IDisposable disposable)
+            using (disposable)
+                if (publisher is RabbitMqProducerService rabbitPublisher)
+                    if (destinationType.Equals("queue", StringComparison.OrdinalIgnoreCase))
+                        await rabbitPublisher.PublishToQueueAsync(data, destinationName);
+                    else
+                        // Default to exchange publishing
+                        await rabbitPublisher.PublishToExchangeAsync(data, destinationName, routingKey);
+                else
+                    // Fallback to default behavior
+                    await publisher.PublishAsync(data, destinationName);
+        else if (publisher is RabbitMqProducerService rabbitPublisher)
+            if (destinationType.Equals("queue", StringComparison.OrdinalIgnoreCase))
+                await rabbitPublisher.PublishToQueueAsync(data, destinationName);
+            else
+                // Default to exchange publishing
+                await rabbitPublisher.PublishToExchangeAsync(data, destinationName, routingKey);
         else
-        {
             // Fallback to default behavior
-            await publisher.PublishAsync(data, destination);
-        }
+            await publisher.PublishAsync(data, destinationName);
     }
 }

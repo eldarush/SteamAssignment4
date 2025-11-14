@@ -1,53 +1,68 @@
-using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using RabbitThingy.Models;
 using System.Text;
 using System.Text.Json;
-using RabbitThingy.Configuration;
+using RabbitThingy.Messaging;
 
 namespace RabbitThingy.Communication.Publishers;
 
 /// <summary>
 /// RabbitMQ implementation of IMessagePublisher
 /// </summary>
-public class RabbitMqProducerService : IMessagePublisher, IDisposable
+public class RabbitMqProducerService : IMessagePublisher, IRabbitMqCommunication, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
-    private readonly RabbitMqConfig _config;
 
     /// <summary>
     /// Gets the type of the publisher
     /// </summary>
-    public string Type => "RabbitMQ";
+    public MessageType MessageType { get; }
 
     /// <summary>
     /// Initializes a new instance of the RabbitMqProducerService class
     /// </summary>
-    /// <param name="configurationService">The configuration service</param>
-    public RabbitMqProducerService(IConfigurationService configurationService)
+    /// <param name="endpoint">The RabbitMQ endpoint</param>
+    /// <param name="destinationType">The type of destination (queue or exchange)</param>
+    public RabbitMqProducerService(string endpoint, string destinationType = "queue")
     {
-        var appConfig = configurationService.LoadConfiguration();
-        _config = appConfig.RabbitMq ?? throw new InvalidOperationException("RabbitMQ configuration is required");
-
-        // Validate required properties
-        if (string.IsNullOrEmpty(_config.Hostname))
-            throw new InvalidOperationException("RabbitMQ Hostname is required");
-        if (string.IsNullOrEmpty(_config.Username))
-            throw new InvalidOperationException("RabbitMQ Username is required");
-        if (string.IsNullOrEmpty(_config.Password))
-            throw new InvalidOperationException("RabbitMQ Password is required");
+        var config = ParseRabbitMqConfig(endpoint);
+        
+        // Set the message type based on destination type
+        MessageType = destinationType.Equals("exchange", StringComparison.OrdinalIgnoreCase) ? MessageType.Exchange : MessageType.Queue;
 
         var factory = new ConnectionFactory
         {
-            HostName = _config.Hostname,
-            Port = _config.Port,
-            UserName = _config.Username,
-            Password = _config.Password
+            HostName = config.Hostname,
+            Port = config.Port,
+            UserName = config.Username,
+            Password = config.Password
         };
 
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
+    }
+
+    /// <summary>
+    /// Parses RabbitMQ configuration from endpoint URL
+    /// </summary>
+    /// <param name="endpoint">The endpoint URL</param>
+    /// <returns>RabbitMQ connection configuration</returns>
+    private (string Hostname, int Port, string Username, string Password) ParseRabbitMqConfig(string endpoint)
+    {
+        var uri = new Uri(endpoint);
+        var userInfo = uri.UserInfo.Split(':');
+        
+        // Require both username and password to be provided
+        if (userInfo.Length < 2)
+        {
+            throw new InvalidOperationException("Both username and password must be provided in the endpoint URI");
+        }
+        
+        var username = userInfo[0];
+        var password = userInfo[1];
+        
+        return (uri.Host, uri.Port, username, password);
     }
 
     /// <summary>
@@ -89,7 +104,7 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
     {
         // Ensure exchange exists by declaring it
         _channel.ExchangeDeclare(exchange: exchangeName,
-                               type: ExchangeType.Fanout, // Using Fanout as default type
+                               type: ExchangeType.Fanout,
                                durable: true,
                                autoDelete: false,
                                arguments: null);
@@ -116,7 +131,7 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
     /// <param name="destination">The destination name to publish to</param>
     /// <param name="destinationType">The type of destination (queue or exchange)</param>
     /// <param name="routingKey">The routing key to use for exchanges</param>
-    public async Task PublishAsync(List<CleanedUserData> data, string destination, string destinationType = "queue", string routingKey = "")
+    public async Task PublishAsync(List<CleanedUserData> data, string destination, string destinationType, string routingKey = "")
     {
         if (destinationType.Equals("exchange", StringComparison.OrdinalIgnoreCase))
         {
@@ -145,7 +160,7 @@ public class RabbitMqProducerService : IMessagePublisher, IDisposable
     /// </summary>
     public void Dispose()
     {
-        _channel?.Close();
-        _connection?.Close();
+        _channel.Close();
+        _connection.Close();
     }
 }

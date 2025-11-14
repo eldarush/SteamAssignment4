@@ -10,7 +10,7 @@ using RabbitThingy.Configuration;
 
 namespace RabbitThingy;
 
-public class Program
+public static class Program
 {
     public async static Task Main(string[] args)
     {
@@ -22,7 +22,7 @@ public class Program
             Environment.Exit(1);
         }
         
-        string configPath = args[0];
+        var configPath = args[0];
         
         // Create service collection and configure services
         var services = new ServiceCollection();
@@ -33,10 +33,12 @@ public class Program
         
         // Get the data integration service and start it
         var dataIntegrationService = serviceProvider.GetRequiredService<DataIntegrationService>();
-        await dataIntegrationService.StartAsync(CancellationToken.None);
+        await dataIntegrationService.StartAsync();
         
         // Keep the application running
-        await Task.Delay(Timeout.Infinite);
+        Console.WriteLine("Press any key to stop...");
+        Console.ReadKey();
+        dataIntegrationService.Stop();
     }
     
     private static void ConfigureServices(IServiceCollection services, string configPath)
@@ -59,18 +61,8 @@ public class Program
         services.AddSingleton<DataProcessingService>();
         services.AddSingleton<DataIntegrationService>();
 
-        // Register consumers
-        services.AddTransient<IMessageConsumer, RabbitMqConsumerService>();
-
-        // Register publishers
-        services.AddTransient<IMessagePublisher, RabbitMqProducerService>();
-
         // Register factories
         services.AddSingleton<MessageConsumerFactory>();
         services.AddSingleton<MessagePublisherFactory>();
-
-        // Register facades
-        services.AddSingleton<MessagingFacade>();
-        services.AddSingleton<DataProcessingFacade>();
     }
 }

@@ -1,0 +1,22 @@
+# RabbitMQ Configuration for Stage 2 - Complete Example
+# This configuration demonstrates all functionality:
+# - Multiple consumers with different formats (JSON and YAML)
+# - Different RabbitMQ servers (ports 5672 and 5673)
+# - Consuming from both queues and exchanges
+# - Publishing to both queues and exchanges
+
+consumers:
+  # Consumer 1: JSON format from RabbitMQ queue on port 5672
+  - endpoint: amqp://guest:guest@localhost:5672/queue1
+    format: json
+    sourceType: queue
+  # Consumer 2: YAML format from RabbitMQ exchange on port 5673
+  - endpoint: amqp://guest:guest@localhost:5673/exchange1
+    format: yaml
+    sourceType: exchange
+
+output:
+  # Output configuration - publish to exchange
+  endpoint: amqp://guest:guest@localhost:5672/output.exchange
+  format: json
+  destinationType: exchange

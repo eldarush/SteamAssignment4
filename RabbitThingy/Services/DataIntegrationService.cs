@@ -7,6 +7,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Communication.Publishers;
+using System.Text.Json;
+using YamlDotNet.Serialization;
 
 namespace RabbitThingy.Services;
 
@@ -16,12 +18,10 @@ namespace RabbitThingy.Services;
 public class DataIntegrationService
 {
     private readonly ILogger<DataIntegrationService> _logger;
-    private readonly MessagingFacade _messagingFacade;
-    private readonly DataProcessingFacade _dataProcessingFacade;
+    private readonly DataProcessingService _dataProcessingService;
     private readonly MessageConsumerFactory _consumerFactory;
     private readonly MessagePublisherFactory _publisherFactory;
     private readonly IConfigurationService _configurationService;
-    private readonly string _basePath;
     private readonly ConcurrentBag<UserData> _messageBuffer;
     private readonly CancellationTokenSource _cancellationTokenSource;
 
@@ -29,26 +29,22 @@ public class DataIntegrationService
     /// Initializes a new instance of the DataIntegrationService class
     /// </summary>
     /// <param name="logger">The logger instance</param>
-    /// <param name="messagingFacade">The messaging facade</param>
-    /// <param name="dataProcessingFacade">The data processing facade</param>
+    /// <param name="dataProcessingService">The data processing service</param>
     /// <param name="consumerFactory">The message consumer factory</param>
     /// <param name="publisherFactory">The message publisher factory</param>
     /// <param name="configurationService">The configuration service</param>
     public DataIntegrationService(
         ILogger<DataIntegrationService> logger,
-        MessagingFacade messagingFacade,
-        DataProcessingFacade dataProcessingFacade,
+        DataProcessingService dataProcessingService,
         MessageConsumerFactory consumerFactory,
         MessagePublisherFactory publisherFactory,
         IConfigurationService configurationService)
     {
         _logger = logger;
-        _messagingFacade = messagingFacade;
-        _dataProcessingFacade = dataProcessingFacade;
+        _dataProcessingService = dataProcessingService;
         _consumerFactory = consumerFactory;
         _publisherFactory = publisherFactory;
         _configurationService = configurationService;
-        _basePath = AppDomain.CurrentDomain.BaseDirectory;
         _messageBuffer = new ConcurrentBag<UserData>();
         _cancellationTokenSource = new CancellationTokenSource();
     }
@@ -56,18 +52,14 @@ public class DataIntegrationService
     /// <summary>
     /// Starts the data integration process
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token to stop the process</param>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync()
     {
         try
         {
             _logger.LogInformation("Starting data integration process");
 
             // Load configuration
-            var config = _configurationService.LoadConfiguration();
-
-            // Load sample data and send to queues for testing
-            await LoadSampleDataAsync(config);
+            var config = _configurationService.LoadConfiguration(null);
 
             // Start the background processing task
             var processingTask = Task.Run(() => ProcessMessagesAsync(config, _cancellationTokenSource.Token));
@@ -99,10 +91,14 @@ public class DataIntegrationService
         {
             var consumeTasks = new List<Task>();
 
-            // Start consuming from all configured sources (queues or exchanges)
-            foreach (var source in config.Input.Queues)
+            // Start consuming from all configured consumers
+            for (int i = 0; i < config.Consumers.Count; i++)
             {
-                var consumeTask = _consumerFactory.StartConsumingAsync("RabbitMQ", source.Name, _messageBuffer, cancellationToken);
+                var consumer = config.Consumers[i];
+                // Extract source name from endpoint (everything after the last '/')
+                var sourceName = consumer.Endpoint.Substring(consumer.Endpoint.LastIndexOf('/') + 1);
+                
+                var consumeTask = MessageConsumerFactory.StartConsumingAsync(consumer.Endpoint, consumer.Format, sourceName, consumer.SourceType, _messageBuffer, cancellationToken);
                 consumeTasks.Add(consumeTask);
             }
 
@@ -125,11 +121,9 @@ public class DataIntegrationService
     /// <param name="cancellationToken">Cancellation token to stop processing</param>
     private async Task ProcessMessagesAsync(AppConfig config, CancellationToken cancellationToken)
     {
-        var timeoutSeconds = config.Processing.Batching.TimeoutSeconds;
-        var maxMessages = config.Processing.Batching.MaxMessages;
-
         var batchTimer = Stopwatch.StartNew();
         var batch = new List<UserData>();
+        var batchTimeoutSeconds = 3; // 3-second timeout for batching
 
         try
         {
@@ -137,14 +131,15 @@ public class DataIntegrationService
             {
                 // Collect messages for batching
                 while (!cancellationToken.IsCancellationRequested &&
-                       batch.Count < maxMessages &&
                        _messageBuffer.TryTake(out var message))
                 {
                     batch.Add(message);
                 }
 
-                // Check if we should publish the batch (either timeout reached or max messages reached)
-                if (batch.Count > 0 && (batchTimer.Elapsed.TotalSeconds >= timeoutSeconds || batch.Count >= maxMessages))
+                // Process batch if we have messages and either:
+                // 1. We've reached the timeout (3 seconds), or
+                // 2. We have a substantial number of messages
+                if (batch.Count > 0 && (batchTimer.Elapsed.TotalSeconds >= batchTimeoutSeconds || batch.Count >= 100))
                 {
                     await ProcessBatchAsync(config, batch);
                     batch.Clear();
@@ -153,6 +148,12 @@ public class DataIntegrationService
                 else if (batch.Count == 0)
                 {
                     // No messages, small delay to prevent busy waiting
+                    await Task.Delay(100, cancellationToken);
+                }
+                else
+                {
+                    // We have messages but haven't reached timeout or size threshold
+                    // Wait a short time before checking again
                     await Task.Delay(100, cancellationToken);
                 }
             }
@@ -189,103 +190,20 @@ public class DataIntegrationService
         {
             _logger.LogInformation("Processing batch of {Count} messages", batch.Count);
 
-            // For simplicity, we'll treat all messages as coming from the same source
-            // In a real implementation, you might want to track source information
-            var processedData = _dataProcessingFacade.ProcessData(batch);
+            // Process data using LINQ to select only 'id' and 'name' fields
+            var processedData = _dataProcessingService.ProcessData(batch);
 
-            // Check output file size limit
-            var fileSizeLimit = config.Processing.OutputFileSizeLimit;
-            if (processedData.Count > fileSizeLimit)
-            {
-                _logger.LogWarning("Processed data exceeds file size limit. Truncating to {Limit} records.", fileSizeLimit);
-                processedData = processedData.Take(fileSizeLimit).ToList();
-            }
+            // Extract destination name from output endpoint (everything after the last '/')
+            var destinationName = config.Output.Endpoint.Substring(config.Output.Endpoint.LastIndexOf('/') + 1);
 
-            // Send data to output destination (queue or exchange)
-            var destination = config.Output.Destination;
-            
-            // Use the publisher factory with destination type information
-            await _publisherFactory.PublishAsync(
-                "RabbitMQ", 
-                processedData, 
-                destination.Name, 
-                destination.Type, 
-                destination.RoutingKey);
+            // Send data to output destination from configuration
+            await _publisherFactory.PublishToExchangeAsync(processedData, destinationName);
 
-            _logger.LogInformation("Successfully processed and sent {Count} records to output {Type} '{Name}'", processedData.Count, destination.Type, destination.Name);
+            _logger.LogInformation("Successfully processed and sent {Count} records to output {DestinationType} '{Destination}'", processedData.Count, config.Output.DestinationType, destinationName);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing batch of messages");
-        }
-    }
-
-    /// <summary>
-    /// Loads sample data into queues for testing
-    /// </summary>
-    /// <param name="config">The application configuration</param>
-    private async Task LoadSampleDataAsync(AppConfig config)
-    {
-        _logger.LogInformation("Loading sample data into sources for testing");
-
-        // Read JSON data
-        var jsonFilePath = Path.Combine(_basePath, "..", "..", "..", "..", "Data", "json", "input1.json");
-        _logger.LogInformation("Looking for JSON file at: {Path}", jsonFilePath);
-
-        if (File.Exists(jsonFilePath))
-        {
-            var jsonData = await File.ReadAllTextAsync(jsonFilePath);
-            var jsonUserData = DataParser.ParseJsonData(jsonData);
-
-            // Send JSON data to first source
-            if (config.Input.Queues.Count > 0)
-            {
-                var firstSource = config.Input.Queues[0];
-
-                // Convert to CleanedUserData for publishing
-                var cleanedJsonData = jsonUserData.Select(data => new CleanedUserData
-                {
-                    Id = data.Id,
-                    Name = data.Name
-                }).ToList();
-
-                await _publisherFactory.PublishAsync("RabbitMQ", cleanedJsonData, firstSource.Name);
-                _logger.LogInformation("Loaded {Count} JSON records to {Type} {Name}", jsonUserData.Count, firstSource.Type, firstSource.Name);
-            }
-        }
-        else
-        {
-            _logger.LogWarning("JSON file not found at: {Path}", jsonFilePath);
-        }
-
-        // Read YAML data
-        var yamlFilePath = Path.Combine(_basePath, "..", "..", "..", "..", "Data", "yaml", "input2.yaml");
-        _logger.LogInformation("Looking for YAML file at: {Path}", yamlFilePath);
-
-        if (File.Exists(yamlFilePath))
-        {
-            var yamlData = await File.ReadAllTextAsync(yamlFilePath);
-            var yamlUserData = DataParser.ParseYamlData(yamlData);
-
-            // Send YAML data to second source
-            if (config.Input.Queues.Count > 1)
-            {
-                var secondSource = config.Input.Queues[1];
-
-                // Convert to CleanedUserData for publishing
-                var cleanedYamlData = yamlUserData.Select(data => new CleanedUserData
-                {
-                    Id = data.Id,
-                    Name = data.Name
-                }).ToList();
-
-                await _publisherFactory.PublishAsync("RabbitMQ", cleanedYamlData, secondSource.Name);
-                _logger.LogInformation("Loaded {Count} YAML records to {Type} {Name}", yamlUserData.Count, secondSource.Type, secondSource.Name);
-            }
-        }
-        else
-        {
-            _logger.LogWarning("YAML file not found at: {Path}", yamlFilePath);
         }
     }
 

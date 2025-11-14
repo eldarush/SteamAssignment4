@@ -24,8 +24,7 @@ public class MessagingFacadeTests
     {
         // Act & Assert
         Assert.DoesNotThrow(() => new MessagingFacade(
-            _mockLogger.Object,
-            _mockPublishers.Object));
+            _mockLogger.Object));
     }
 
     [Test]
@@ -33,8 +32,7 @@ public class MessagingFacadeTests
     {
         // Arrange
         var facade = new MessagingFacade(
-            _mockLogger.Object,
-            _mockPublishers.Object);
+            _mockLogger.Object);
 
         // Act & Assert
         Assert.DoesNotThrow(() => facade.Dispose());
