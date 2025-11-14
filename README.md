@@ -24,7 +24,10 @@ This project implements an asynchronous data integration system using RabbitMQ. 
 
 ## Configuration
 
-The system requires all configuration to be present in `appsettings.json`:
+The system requires all configuration to be present in a YAML configuration file. 
+An example configuration file is provided in `RabbitThingy/Configuration/Yaml/rabbitmq-config.yaml`.
+
+The configuration file must contain:
 - RabbitMQ connection settings (hostname, port, username, password)
 - Input queue names (queue1, queue2)
 - Output exchange name ("exchange")
@@ -32,9 +35,28 @@ The system requires all configuration to be present in `appsettings.json`:
 
 ## Requirements
 
-- RabbitMQ server running on localhost:5672 with username/password: admin/admin
+- RabbitMQ server running on localhost:5672 with username/password: guest/guest
 - Pre-existing queues (queue1, queue2) and exchange ("exchange") of type fanout
-- All configuration values must be present in appsettings.json (no defaults)
+- All configuration values must be present in the YAML configuration file (no defaults)
+
+## Running the Application
+
+The application requires a path to the configuration file as a command-line argument:
+
+```
+dotnet run --project RabbitThingy/RabbitThingy.csproj -- <path-to-config-file>
+```
+
+Or if running the compiled executable:
+
+```
+RabbitThingy.exe <path-to-config-file>
+```
+
+Example:
+```
+dotnet run --project RabbitThingy/RabbitThingy.csproj -- RabbitThingy/Configuration/Yaml/rabbitmq-config.yaml
+```
 
 ## Expected Output
 
@@ -47,4 +69,4 @@ The system will produce:
 
 ## Implementation Details
 
-All services now receive their configuration directly from the appsettings.json file through dependency injection, with no default values. If any required configuration is missing, the application will throw an exception at startup.
+All services now receive their configuration directly from the YAML configuration file through dependency injection, with no default values. If any required configuration is missing, the application will throw an exception at startup.

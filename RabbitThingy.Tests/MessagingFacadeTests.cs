@@ -2,7 +2,7 @@ using NUnit.Framework;
 using Moq;
 using RabbitThingy.Messaging;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
+using RabbitThingy.Communication.Publishers;
 
 namespace RabbitThingy.Tests;
 
@@ -10,13 +10,13 @@ namespace RabbitThingy.Tests;
 public class MessagingFacadeTests
 {
     private Mock<ILogger<MessagingFacade>> _mockLogger;
-    private Mock<IConfiguration> _mockConfiguration;
+    private Mock<IEnumerable<IMessagePublisher>> _mockPublishers;
 
     [SetUp]
     public void Setup()
     {
         _mockLogger = new Mock<ILogger<MessagingFacade>>();
-        _mockConfiguration = new Mock<IConfiguration>();
+        _mockPublishers = new Mock<IEnumerable<IMessagePublisher>>();
     }
 
     [Test]
@@ -25,7 +25,7 @@ public class MessagingFacadeTests
         // Act & Assert
         Assert.DoesNotThrow(() => new MessagingFacade(
             _mockLogger.Object,
-            _mockConfiguration.Object));
+            _mockPublishers.Object));
     }
 
     [Test]
@@ -34,7 +34,7 @@ public class MessagingFacadeTests
         // Arrange
         var facade = new MessagingFacade(
             _mockLogger.Object,
-            _mockConfiguration.Object);
+            _mockPublishers.Object);
 
         // Act & Assert
         Assert.DoesNotThrow(() => facade.Dispose());
