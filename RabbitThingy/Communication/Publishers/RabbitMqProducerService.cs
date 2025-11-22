@@ -1,6 +1,6 @@
 using RabbitMQ.Client;
+using RabbitThingy.Data.Models;
 using RabbitThingy.Messaging;
-using RabbitThingy.Models;
 using RabbitThingy.Services;
 using System.Text;
 using System.Text.Json;
@@ -10,7 +10,7 @@ namespace RabbitThingy.Communication.Publishers;
 /// <summary>
 /// RabbitMQ implementation of IMessagePublisher
 /// </summary>
-public class RabbitMqProducerService : RabbitMqBaseService, IMessagePublisher, IRabbitMqCommunication
+public class RabbitMqProducerService : RabbitMqService, IMessagePublisher, IRabbitMqCommunication
 {
     /// <summary>
     /// Gets the type of the publisher
@@ -117,4 +117,5 @@ public class RabbitMqProducerService : RabbitMqBaseService, IMessagePublisher, I
         // For backward compatibility, we'll assume the destination is a queue
         await PublishToQueueAsync(data, destination);
     }
+    
 }

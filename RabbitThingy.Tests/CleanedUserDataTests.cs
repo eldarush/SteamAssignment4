@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using RabbitThingy.Models;
+using RabbitThingy.Data.Models;
 
 namespace RabbitThingy.Tests;
 

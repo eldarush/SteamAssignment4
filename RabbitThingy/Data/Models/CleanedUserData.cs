@@ -1,4 +1,4 @@
-namespace RabbitThingy.Models;
+namespace RabbitThingy.Data.Models;
 
 public class CleanedUserData
 {

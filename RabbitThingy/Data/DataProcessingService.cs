@@ -1,6 +1,6 @@
-using RabbitThingy.Models;
+using RabbitThingy.Data.Models;
 
-namespace RabbitThingy.Services;
+namespace RabbitThingy.Data;
 
 /// <summary>
 /// Service for processing data

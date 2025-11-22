@@ -1,3 +1,4 @@
+using RabbitThingy.Data.Models;
 using System.Collections.Concurrent;
 
 namespace RabbitThingy.Communication.Consumers;
@@ -33,7 +34,7 @@ public class MessageConsumerFactory
     /// <param name="sourceType">The type of source (queue or exchange)</param>
     /// <param name="messageBuffer">The buffer to add consumed messages to</param>
     /// <param name="cancellationToken">Cancellation token to stop consumption</param>
-    public async static Task StartConsumingAsync(string endpoint, string format, string sourceName, string sourceType, ConcurrentBag<Models.UserData> messageBuffer,
+    public async static Task StartConsumingAsync(string endpoint, string format, string sourceName, string sourceType, ConcurrentBag<UserData> messageBuffer,
         CancellationToken cancellationToken)
     {
         var consumer = CreateConsumer(endpoint, format, sourceType);

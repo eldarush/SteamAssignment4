@@ -1,6 +1,6 @@
 using NUnit.Framework;
-using RabbitThingy.Services;
-using RabbitThingy.Models;
+using RabbitThingy.Data;
+using RabbitThingy.Data.Models;
 
 namespace RabbitThingy.Tests;
 

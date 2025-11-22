@@ -5,12 +5,12 @@ namespace RabbitThingy.Services;
 /// <summary>
 /// Base class for RabbitMQ services, handling connection and channel management.
 /// </summary>
-public abstract class RabbitMqBaseService : IDisposable
+public abstract class RabbitMqService : IDisposable
 {
     protected readonly IConnection _connection;
     protected readonly IModel _channel;
 
-    protected RabbitMqBaseService(string endpoint)
+    protected RabbitMqService(string endpoint)
     {
         var config = ParseRabbitMqConfig(endpoint);
 

@@ -1,10 +1,11 @@
 using Microsoft.Extensions.Logging;
-using RabbitThingy.Configuration;
-using RabbitThingy.Models;
+using RabbitThingy.Core;
+using RabbitThingy.Data.Models;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Communication.Publishers;
+using RabbitThingy.Data;
 
 namespace RabbitThingy.Services;
 
@@ -74,18 +75,12 @@ public class DataIntegrationService
     {
         try
         {
-            var consumeTasks = new List<Task>();
+            var consumeTasks = (from consumer in config.Consumers
+                let sourceName = consumer.Endpoint.Substring(consumer.Endpoint.LastIndexOf('/') + 1)
+                select MessageConsumerFactory.StartConsumingAsync(consumer.Endpoint, consumer.Format, sourceName, consumer.SourceType, _messageBuffer,
+                    cancellationToken)).ToList();
 
             // Start consuming from all configured consumers
-            for (int i = 0; i < config.Consumers.Count; i++)
-            {
-                var consumer = config.Consumers[i];
-                // Extract source name from endpoint (everything after the last '/')
-                var sourceName = consumer.Endpoint.Substring(consumer.Endpoint.LastIndexOf('/') + 1);
-                
-                var consumeTask = MessageConsumerFactory.StartConsumingAsync(consumer.Endpoint, consumer.Format, sourceName, consumer.SourceType, _messageBuffer, cancellationToken);
-                consumeTasks.Add(consumeTask);
-            }
 
             // Run for a while to collect messages
             await Task.WhenAny(
@@ -184,7 +179,8 @@ public class DataIntegrationService
             // Send data to output destination from configuration
             await _publisherFactory.PublishToExchangeAsync(processedData, destinationName);
 
-            _logger.LogInformation("Successfully processed and sent {Count} records to output {DestinationType} '{Destination}'", processedData.Count, config.Output.DestinationType, destinationName);
+            _logger.LogInformation("Successfully processed and sent {Count} records to output {DestinationType} '{Destination}'", processedData.Count,
+                config.Output.DestinationType, destinationName);
         }
         catch (Exception ex)
         {

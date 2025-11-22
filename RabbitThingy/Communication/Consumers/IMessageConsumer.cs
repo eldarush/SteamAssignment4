@@ -1,4 +1,4 @@
-using RabbitThingy.Models;
+using RabbitThingy.Data.Models;
 using System.Collections.Concurrent;
 
 namespace RabbitThingy.Communication.Consumers;

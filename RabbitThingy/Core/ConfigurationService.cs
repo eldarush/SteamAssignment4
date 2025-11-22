@@ -2,7 +2,7 @@ using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using System.ComponentModel.DataAnnotations;
 
-namespace RabbitThingy.Configuration;
+namespace RabbitThingy.Core;
 
 /// <summary>
 /// Service responsible for loading and managing application configuration
@@ -22,7 +22,7 @@ public class ConfigurationService : IConfigurationService
     }
 
     /// <summary>
-    /// Loads configuration from YAML file
+    /// Loads configuration from YAML file or returns previously set AppConfig
     /// </summary>
     /// <param name="configPath">Optional path to the configuration file. If not provided, uses default path or constructor path.</param>
     /// <returns>The loaded application configuration</returns>
@@ -34,9 +34,9 @@ public class ConfigurationService : IConfigurationService
         // Use provided path or constructor path (no default paths)
         var path = configPath ?? _configPath;
 
-        // Require a path to be provided
+        // Require a path to be provided unless configuration was set programmatically
         if (string.IsNullOrEmpty(path))
-            throw new InvalidOperationException("Configuration file path must be provided");
+            throw new InvalidOperationException("Configuration file path must be provided or configuration must be set programmatically");
 
         if (File.Exists(path))
         {
@@ -54,6 +54,16 @@ public class ConfigurationService : IConfigurationService
         }
 
         throw new InvalidOperationException($"Configuration file not found at {path}");
+    }
+
+    /// <summary>
+    /// Sets the configuration programmatically (builder-based configuration)
+    /// </summary>
+    /// <param name="config">The AppConfig created by builder</param>
+    public void SetConfiguration(AppConfig config)
+    {
+        ValidateConfiguration(config);
+        _appConfig = config;
     }
 
     /// <summary>

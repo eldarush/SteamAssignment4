@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using YamlDotNet.Serialization;
 
-namespace RabbitThingy.Configuration;
+namespace RabbitThingy.Core;
 
 /// <summary>
 /// Represents the application configuration structure
@@ -73,4 +73,10 @@ public class OutputConfig
     /// </summary>
     [YamlMember(Alias = "destinationType")]
     public string DestinationType { get; set; } = "exchange";
+
+    /// <summary>
+    /// Optional extra parameter used by builder-based configuration (e.g., max file size)
+    /// </summary>
+    [YamlMember(Alias = "fileSize")]
+    public int FileSize { get; set; } = 0;
 }
