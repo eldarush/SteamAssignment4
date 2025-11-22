@@ -1,4 +1,4 @@
-using RabbitThingy.Models;
+using RabbitThingy.Data.Models;
 
 namespace RabbitThingy.Communication.Publishers;
 

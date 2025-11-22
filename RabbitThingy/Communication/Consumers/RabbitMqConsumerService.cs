@@ -1,6 +1,7 @@
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using RabbitThingy.Models;
+using RabbitThingy.Data;
+using RabbitThingy.Data.Models;
 using System.Text;
 using System.Collections.Concurrent;
 using RabbitThingy.Services;
@@ -11,7 +12,7 @@ namespace RabbitThingy.Communication.Consumers;
 /// <summary>
 /// RabbitMQ implementation of IMessageConsumer
 /// </summary>
-public class RabbitMqConsumerService : RabbitMqBaseService, IMessageConsumer, IRabbitMqCommunication
+public class RabbitMqConsumerService : RabbitMqService, IMessageConsumer, IRabbitMqCommunication
 {
     private readonly string _format;
 

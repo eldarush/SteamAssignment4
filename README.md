@@ -1,6 +1,6 @@
 # RabbitThingy - Async RabbitMQ Data Integration
 
-This project implements an asynchronous data integration system using RabbitMQ. It consumes messages from two queues, processes the data, and publishes the results to an output exchange.
+This project implements an asynchronous data integration system using RabbitMQ. It consumes messages from configured sources, processes the data, and publishes the results to an output exchange.
 
 ## Features
 
@@ -22,16 +22,103 @@ This project implements an asynchronous data integration system using RabbitMQ. 
 5. Data from both sources is merged and sorted by 'id'
 6. The processed data is published to an output RabbitMQ exchange named "exchange"
 
-## Configuration
+## Configuration (YAML or Builder)
 
-The system requires all configuration to be present in a YAML configuration file. 
-An example configuration file is provided in `Example/config.yaml`.
+Two configuration modes are supported:
 
-The configuration file must contain:
-- Multiple consumers with different formats (JSON and YAML)
-- RabbitMQ connection settings (hostname, port, username, password)
-- Output exchange name ("output.exchange")
-- Output file size limit
+1) YAML-based (backward compatible): pass a path to a YAML file (same as before).
+
+2) Builder-based (new): construct the configuration in code using the `DataIntegratorBuilder` and run the app programmatically. This is intended for advanced use and for migrating existing YAML files into code.
+
+### Migration CLI (YAML -> Builder code)
+
+You can convert a YAML configuration file into a C# `DataIntegratorBuilder` snippet using the `migrate` command (now implemented via `RabbitThingy.Tools.Migrator`):
+
+```
+# Convert Example/config.yaml into output_builder_snippet.cs
+dotnet run --project RabbitThingy/RabbitThingy.csproj -- migrate Example/config.yaml output_builder_snippet.cs
+```
+
+The migrator is implemented in `RabbitThingy/Tools/Migrator.cs` and wraps `YamlToBuilderMigration`.
+
+### Two entry-point styles (examples)
+
+1) One-liner (load YAML and run immediately)
+
+This is the simplest program entry point — it is functionally identical to the previous behavior.
+
+```csharp
+// Program_OneLiner.cs
+using RabbitThingy.Configuration;
+
+class Program
+{
+    static int Main(string[] args)
+    {
+        // Default uses Example/config.yaml if no arg provided
+        var yamlPath = args.Length > 0 ? args[0] : "Example/config.yaml";
+        RabbitThingy.Configuration.Bootstrap.New(yamlPath).Run();
+        return 0;
+    }
+}
+```
+
+2) Load, modify, then run (save the Runner and change configuration programmatically)
+
+```csharp
+// Program_ModifyThenRun.cs
+using RabbitThingy.Configuration;
+
+class Program
+{
+    static int Main(string[] args)
+    {
+        var runner = Bootstrap.New("Example/config.yaml");
+
+        // Add two publishers/outputs or extra consumers at runtime
+        runner.Builder.AddPublisher("amqp://user:pass@output1:5672/outA", Format.Json);
+        runner.Builder.AddPublisher("amqp://user:pass@output2:5672/outB", Format.Json);
+
+        // Start the system and get the running service so we can stop it later
+        var running = runner.Run();
+
+        // Keep running until user interaction
+        Console.WriteLine("Press any key to stop...");
+        Console.ReadKey();
+        running.Stop();
+        return 0;
+    }
+}
+```
+
+### Example 1 — YAML-only (default)
+
+Run with the included example config file:
+
+```
+dotnet run --project RabbitThingy/RabbitThingy.csproj -- Example/config.yaml
+```
+
+This will behave exactly like the previous application: `Bootstrap.New(path).Run()` is used internally.
+
+### Example 2 — Programmatic modification using `Bootstrap.New().Run()`
+
+You can load the YAML config and then modify it at runtime using the builder API before running. Example program:
+
+```csharp
+// Program.cs (builder modified example)
+var runner = RabbitThingy.Configuration.Bootstrap.New("Example/config.yaml");
+
+// Add a new consumer programmatically
+runner.Builder.AddConsumer("amqp://user:pass@rabbit3:5672/newqueue", RabbitThingy.Configuration.Format.Json);
+
+// Replace output or add publisher settings
+runner.Builder.AddPublisher("amqp://user:pass@output:5672/out", RabbitThingy.Configuration.Format.Json, "exchange", fileSize: 1000);
+
+runner.Run();
+```
+
+This will load the example YAML config, allow you to mutate the configuration using the fluent API, and then run the application.
 
 ## Requirements
 

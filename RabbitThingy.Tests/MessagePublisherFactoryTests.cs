@@ -1,8 +1,7 @@
 using NUnit.Framework;
 using Moq;
 using RabbitThingy.Communication.Publishers;
-using RabbitThingy.Models;
-using RabbitThingy.Configuration;
+using RabbitThingy.Core;
 
 namespace RabbitThingy.Tests;
 

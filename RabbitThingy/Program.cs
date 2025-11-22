@@ -1,65 +1,113 @@
-using Microsoft.Extensions.DependencyInjection;
-using RabbitThingy.Communication.Consumers;
-using RabbitThingy.Communication.Publishers;
-using RabbitThingy.Services;
-using Serilog;
-using RabbitThingy.Configuration;
+using RabbitThingy.Core;
+using RabbitThingy.Tools;
 
 namespace RabbitThingy;
 
 public static class Program
 {
-    public async static Task Main(string[] args)
+    public static int Main(string[] args)
     {
-        // Check if a configuration file path is provided as an argument
-        if (args.Length == 0)
+        // Migrate CLI: migrate <input.yaml> <output.cs>
+        if (args.Length >= 1 && args[0].Equals("migrate", StringComparison.OrdinalIgnoreCase))
         {
-            Console.WriteLine("Error: Configuration file path is required.");
-            Console.WriteLine("Usage: RabbitThingy.exe <path-to-config-file>");
-            Environment.Exit(1);
+            if (args.Length < 3)
+            {
+                Console.WriteLine("Usage: RabbitThingy migrate <input.yaml> <output.cs>");
+                return 1;
+            }
+
+            var yamlPath = args[1];
+            var outPath = args[2];
+
+            try
+            {
+                Migrator.MigrateYamlToBuilder(yamlPath, outPath);
+                Console.WriteLine($"Wrote builder code to {outPath}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Migration failed: {ex.Message}");
+                return 3;
+            }
         }
-        
-        var configPath = args[0];
-        
-        // Create service collection and configure services
-        var services = new ServiceCollection();
-        ConfigureServices(services, configPath);
-        
-        // Build service provider
-        var serviceProvider = services.BuildServiceProvider();
-        
-        // Get the data integration service and start it
-        var dataIntegrationService = serviceProvider.GetRequiredService<DataIntegrationService>();
-        await dataIntegrationService.StartAsync();
-        
-        // Keep the application running
-        Console.WriteLine("Press any key to stop...");
-        Console.ReadKey();
-        dataIntegrationService.Stop();
-    }
-    
-    private static void ConfigureServices(IServiceCollection services, string configPath)
-    {
-        // Configure logging
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.Console()
-            .CreateLogger();
-            
-        services.AddLogging(builder =>
+
+        // Parse optional autostop argument anywhere in args: autostop=<seconds>
+        int? autoStopSeconds = null;
+        foreach (var a in args)
         {
-            builder.AddSerilog(Log.Logger, dispose: true);
-        });
+            if (a.StartsWith("autostop=", StringComparison.OrdinalIgnoreCase))
+            {
+                var part = a.Substring("autostop=".Length);
+                if (int.TryParse(part, out var s)) autoStopSeconds = s;
+            }
+        }
 
-        // Register configuration service with the required path
-        services.AddSingleton<IConfigurationService>(new ConfigurationService(configPath));
+        // Mode selection: default to 'one' (one-liner). Usage:
+        // dotnet run --project RabbitThingy/RabbitThingy.csproj -- one <configPath> [autostop=3]
+        // dotnet run --project RabbitThingy/RabbitThingy.csproj -- modify <configPath> [autostop=3]
+        var mode = args.Length > 0 ? args[0].ToLowerInvariant() : "one";
+        var yaml = args.Length > 1 ? args[1] : Path.Combine("Example", "config.yaml");
 
-        // Register services
-        services.AddSingleton<DataProcessingService>();
-        services.AddSingleton<DataIntegrationService>();
+        if (!File.Exists(yaml))
+        {
+            Console.WriteLine($"Config file not found: {yaml}");
+            return 2;
+        }
 
-        // Register factories
-        services.AddSingleton<MessageConsumerFactory>();
-        services.AddSingleton<MessagePublisherFactory>();
+        if (mode == "one" || mode == "one-liner")
+        {
+            Console.WriteLine($"Starting in one-liner mode using config: {yaml}");
+            var running = Bootstrap.New(yaml).Run();
+            Console.WriteLine("Service started.");
+
+            if (autoStopSeconds.HasValue)
+            {
+                Console.WriteLine($"Autostop configured: stopping after {autoStopSeconds.Value} seconds...");
+                Task.Delay(TimeSpan.FromSeconds(autoStopSeconds.Value)).GetAwaiter().GetResult();
+                running.Stop();
+            }
+            else
+            {
+                Console.WriteLine("Press any key to stop...");
+                Console.ReadKey();
+                running.Stop();
+            }
+
+            return 0;
+        }
+        if (mode == "modify" || mode == "modify-run")
+        {
+            Console.WriteLine($"Starting in modify mode using config: {yaml}");
+            var runner = Bootstrap.New(yaml);
+
+            // Add two publishers programmatically before running
+            runner.Builder.AddPublisher("amqp://guest:guest@localhost:5672/output.extra1", Format.Json);
+            runner.Builder.AddPublisher("amqp://guest:guest@localhost:5672/output.extra2", Format.Json);
+
+            // Optionally also demonstrate creating a consumer builder and modifying it
+            var cb = runner.Builder.CreateConsumerBuilder("amqp://guest:guest@localhost:5672/newqueue", Format.Json);
+            cb.SetSourceType("queue");
+
+            var running = runner.Run();
+            Console.WriteLine("Service started (modify mode).");
+
+            if (autoStopSeconds.HasValue)
+            {
+                Console.WriteLine($"Autostop configured: stopping after {autoStopSeconds.Value} seconds...");
+                Task.Delay(TimeSpan.FromSeconds(autoStopSeconds.Value)).GetAwaiter().GetResult();
+                running.Stop();
+            }
+            else
+            {
+                Console.WriteLine("Press any key to stop...");
+                Console.ReadKey();
+                running.Stop();
+            }
+
+            return 0;
+        }
+        Console.WriteLine("Unknown mode. Use 'one' or 'modify' or 'migrate'.");
+        return 4;
     }
 }

@@ -1,5 +1,7 @@
-using RabbitThingy.Configuration;
-using RabbitThingy.Models;
+
+
+using RabbitThingy.Core;
+using RabbitThingy.Data.Models;
 
 namespace RabbitThingy.Communication.Publishers;
 

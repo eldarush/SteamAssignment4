@@ -1,9 +1,9 @@
-using RabbitThingy.Models;
+using RabbitThingy.Data.Models;
 using System.Text.Json;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace RabbitThingy.Services;
+namespace RabbitThingy.Data;
 
 /// <summary>
 /// Utility class for parsing data from various formats
