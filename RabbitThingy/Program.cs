@@ -2,10 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Communication.Publishers;
 using RabbitThingy.Services;
-using RabbitThingy.Messaging;
-using RabbitThingy.DataProcessing;
 using Serilog;
-using Microsoft.Extensions.Logging;
 using RabbitThingy.Configuration;
 
 namespace RabbitThingy;

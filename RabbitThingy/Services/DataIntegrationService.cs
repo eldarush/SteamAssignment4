@@ -1,14 +1,10 @@
 using Microsoft.Extensions.Logging;
 using RabbitThingy.Configuration;
-using RabbitThingy.DataProcessing;
-using RabbitThingy.Messaging;
 using RabbitThingy.Models;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using RabbitThingy.Communication.Consumers;
 using RabbitThingy.Communication.Publishers;
-using System.Text.Json;
-using YamlDotNet.Serialization;
 
 namespace RabbitThingy.Services;
 
@@ -52,32 +48,21 @@ public class DataIntegrationService
     /// <summary>
     /// Starts the data integration process
     /// </summary>
-    public async Task StartAsync()
+    public Task StartAsync()
     {
-        try
-        {
-            _logger.LogInformation("Starting data integration process");
+        _logger.LogInformation("Starting data integration process");
 
-            // Load configuration
-            var config = _configurationService.LoadConfiguration(null);
+        // Load configuration
+        var config = _configurationService.LoadConfiguration(null);
 
-            // Start the background processing task
-            var processingTask = Task.Run(() => ProcessMessagesAsync(config, _cancellationTokenSource.Token));
+        // Start the background processing task (long-running)
+        _ = ProcessMessagesAsync(config, _cancellationTokenSource.Token);
 
-            // Consume data from sources concurrently with batching
-            await ConsumeAndBufferMessagesAsync(config, _cancellationTokenSource.Token);
+        // Start consuming data from sources concurrently
+        _ = ConsumeAndBufferMessagesAsync(config, _cancellationTokenSource.Token);
 
-            // Wait for processing task to complete (it won't in a real scenario, but for this example we'll cancel it)
-            await Task.Delay(1000); // Give some time for messages to be processed
-            _cancellationTokenSource.Cancel();
-
-            if (processingTask != null)
-                await processingTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An error occurred during data integration process");
-        }
+        // Return immediately; Stop() will cancel the token and allow tasks to finish
+        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -21,21 +21,7 @@ public class MessageConsumerFactory
     /// <returns>The created consumer</returns>
     private static IMessageConsumer CreateConsumer(string endpoint, string format, string sourceType = "queue")
     {
-        // Parse endpoint to extract connection details
-        // Expected format: amqp://username:password@hostname:port/queue
-        var uri = new Uri(endpoint);
-        var userInfo = uri.UserInfo.Split(':');
-
-        // Require both username and password to be provided
-        if (userInfo.Length < 2)
-            throw new InvalidOperationException("Both username and password must be provided in the endpoint URI");
-
-        var username = userInfo[0];
-        var password = userInfo[1];
-        var hostname = uri.Host;
-        var port = uri.Port;
-
-        return new RabbitMqConsumerService(hostname, port, username, password, format, sourceType);
+        return new RabbitMqConsumerService(endpoint, format, sourceType);
     }
 
     /// <summary>

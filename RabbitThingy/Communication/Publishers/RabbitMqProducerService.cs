@@ -1,19 +1,17 @@
 using RabbitMQ.Client;
+using RabbitThingy.Messaging;
 using RabbitThingy.Models;
+using RabbitThingy.Services;
 using System.Text;
 using System.Text.Json;
-using RabbitThingy.Messaging;
 
 namespace RabbitThingy.Communication.Publishers;
 
 /// <summary>
 /// RabbitMQ implementation of IMessagePublisher
 /// </summary>
-public class RabbitMqProducerService : IMessagePublisher, IRabbitMqCommunication, IDisposable
+public class RabbitMqProducerService : RabbitMqBaseService, IMessagePublisher, IRabbitMqCommunication
 {
-    private readonly IConnection _connection;
-    private readonly IModel _channel;
-
     /// <summary>
     /// Gets the type of the publisher
     /// </summary>
@@ -24,45 +22,10 @@ public class RabbitMqProducerService : IMessagePublisher, IRabbitMqCommunication
     /// </summary>
     /// <param name="endpoint">The RabbitMQ endpoint</param>
     /// <param name="destinationType">The type of destination (queue or exchange)</param>
-    public RabbitMqProducerService(string endpoint, string destinationType = "queue")
+    public RabbitMqProducerService(string endpoint, string destinationType = "queue") : base(endpoint)
     {
-        var config = ParseRabbitMqConfig(endpoint);
-        
         // Set the message type based on destination type
         MessageType = destinationType.Equals("exchange", StringComparison.OrdinalIgnoreCase) ? MessageType.Exchange : MessageType.Queue;
-
-        var factory = new ConnectionFactory
-        {
-            HostName = config.Hostname,
-            Port = config.Port,
-            UserName = config.Username,
-            Password = config.Password
-        };
-
-        _connection = factory.CreateConnection();
-        _channel = _connection.CreateModel();
-    }
-
-    /// <summary>
-    /// Parses RabbitMQ configuration from endpoint URL
-    /// </summary>
-    /// <param name="endpoint">The endpoint URL</param>
-    /// <returns>RabbitMQ connection configuration</returns>
-    private (string Hostname, int Port, string Username, string Password) ParseRabbitMqConfig(string endpoint)
-    {
-        var uri = new Uri(endpoint);
-        var userInfo = uri.UserInfo.Split(':');
-        
-        // Require both username and password to be provided
-        if (userInfo.Length < 2)
-        {
-            throw new InvalidOperationException("Both username and password must be provided in the endpoint URI");
-        }
-        
-        var username = userInfo[0];
-        var password = userInfo[1];
-        
-        return (uri.Host, uri.Port, username, password);
     }
 
     /// <summary>
@@ -153,14 +116,5 @@ public class RabbitMqProducerService : IMessagePublisher, IRabbitMqCommunication
     {
         // For backward compatibility, we'll assume the destination is a queue
         await PublishToQueueAsync(data, destination);
-    }
-
-    /// <summary>
-    /// Disposes of the RabbitMQ connection and channel
-    /// </summary>
-    public void Dispose()
-    {
-        _channel.Close();
-        _connection.Close();
     }
 }

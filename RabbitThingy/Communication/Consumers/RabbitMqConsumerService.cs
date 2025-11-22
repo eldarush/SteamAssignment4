@@ -11,10 +11,8 @@ namespace RabbitThingy.Communication.Consumers;
 /// <summary>
 /// RabbitMQ implementation of IMessageConsumer
 /// </summary>
-public class RabbitMqConsumerService : IMessageConsumer, IRabbitMqCommunication, IDisposable
+public class RabbitMqConsumerService : RabbitMqBaseService, IMessageConsumer, IRabbitMqCommunication
 {
-    private readonly IConnection _connection;
-    private readonly IModel _channel;
     private readonly string _format;
 
     /// <summary>
@@ -25,36 +23,18 @@ public class RabbitMqConsumerService : IMessageConsumer, IRabbitMqCommunication,
     /// <summary>
     /// Initializes a new instance of the RabbitMqConsumerService class
     /// </summary>
-    /// <param name="hostname">The RabbitMQ hostname</param>
-    /// <param name="port">The RabbitMQ port</param>
-    /// <param name="username">The RabbitMQ username</param>
-    /// <param name="password">The RabbitMQ password</param>
+    /// <param name="endpoint">The RabbitMQ endpoint (amqp://username:password@hostname:port/queue)</param>
     /// <param name="format">The data format for this consumer (json or yaml)</param>
     /// <param name="sourceType">The type of source (queue or exchange)</param>
-    public RabbitMqConsumerService(string hostname, int port, string username, string password, string format, string sourceType = "queue")
+    public RabbitMqConsumerService(string endpoint, string format, string sourceType = "queue") : base(endpoint)
     {
-        // Validate required properties
-        if (string.IsNullOrEmpty(hostname))
-            throw new InvalidOperationException("RabbitMQ Hostname is required");
-        if (string.IsNullOrEmpty(username))
-            throw new InvalidOperationException("RabbitMQ Username is required");
-        if (string.IsNullOrEmpty(password))
-            throw new InvalidOperationException("RabbitMQ Password is required");
         if (string.IsNullOrEmpty(format))
             throw new InvalidOperationException("Format is required");
 
         _format = format.ToLower();
-        
+
         // Set the message type based on source type
         MessageType = sourceType.Equals("exchange", StringComparison.OrdinalIgnoreCase) ? MessageType.Exchange : MessageType.Queue;
-
-        var factory = new ConnectionFactory
-        {
-            HostName = hostname, Port = port, UserName = username, Password = password
-        };
-
-        _connection = factory.CreateConnection();
-        _channel = _connection.CreateModel();
     }
 
     /// <summary>
@@ -195,14 +175,5 @@ public class RabbitMqConsumerService : IMessageConsumer, IRabbitMqCommunication,
     public async Task ConsumeContinuouslyAsync(string queueName, ConcurrentBag<UserData> messageBuffer, CancellationToken cancellationToken)
     {
         await ConsumeContinuouslyFromQueueAsync(queueName, messageBuffer, cancellationToken);
-    }
-
-    /// <summary>
-    /// Disposes of the RabbitMQ connection and channel
-    /// </summary>
-    public void Dispose()
-    {
-        _channel?.Close();
-        _connection?.Close();
     }
 }
